@@ -10,10 +10,9 @@ import ru.yandex.practicum.mymarket.service.ProductService;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Controller
-@RequestMapping("/items")
+@RequestMapping({"/", "/items"})
 public class ProductController {
 
     private final ProductService productService;
@@ -65,6 +64,18 @@ public class ProductController {
     @GetMapping("/{id}")
     public String getItemPage(@PathVariable Long id, Model model) {
 
+        ProductDto product = productService.getItemById(id);
+        model.addAttribute("item", product);
+        return "item";
+    }
+
+    @PostMapping("/{id}")
+    public String updateItemCountInCart(
+            @PathVariable Long id,
+            @RequestParam String action,
+            Model model
+    ) {
+        boolean success = productService.changeItemQuantity(id, action);
         ProductDto product = productService.getItemById(id);
         model.addAttribute("item", product);
         return "item";

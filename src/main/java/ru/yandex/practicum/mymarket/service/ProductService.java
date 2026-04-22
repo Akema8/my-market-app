@@ -127,4 +127,18 @@ public class ProductService {
         }
         return product;
     }
+
+    public List<ProductDto> getItemsInCart() {
+        List<CartItem> cartItems = cartItemRepository.findAll();
+        List<ProductDto> productsInCart = new ArrayList<>();
+
+        for (CartItem cartItem : cartItems) {
+            Product product = cartItem.getProduct();
+            ProductDto dto = productMapper.toDto(product);
+            dto.setCount(cartItem.getCount());
+            productsInCart.add(dto);
+        }
+
+        return productsInCart;
+    }
 }

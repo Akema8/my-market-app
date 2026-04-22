@@ -1,11 +1,11 @@
 package ru.yandex.practicum.mymarket.dto;
 
+import ru.yandex.practicum.mymarket.model.OrderItem;
+
 public class OrderItemDto {
     private Long id;
 
-    private OrderDto order;
-
-    private ProductDto product;
+    private String title;
 
     private int count;
 
@@ -13,25 +13,23 @@ public class OrderItemDto {
 
     public OrderItemDto() {}
 
-    public OrderItemDto(ProductDto product, int count, Long price, OrderDto order) {
-        this.product = product;
+    public OrderItemDto(int count, Long price, String title) {
         this.count = count;
         this.price = price;
-        this.order = order;
+        this.title = title;
     }
 
-    public Long getId() { return id; }
+    public Long id() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public OrderDto getOrder() { return order; }
-    public void setOrder(OrderDto order) { this.order = order; }
-
-    public ProductDto getProduct() { return product; }
-    public void setProduct(ProductDto product) { this.product = product; }
-
-    public int getCount() { return count; }
+    public int count() { return count; }
     public void setCount(int count) { this.count = count; }
 
-    public Long getPrice() { return price; }
+    public Long price() { return price; }
     public void setPrice(Long price) { this.price = price; }
+
+    public String title() { return title; }
+    public void setTitle(String title) { this.title = title; }
+
+
 }
