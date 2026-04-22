@@ -1,4 +1,4 @@
-package ru.yandex.practicum.model;
+package ru.yandex.practicum.mymarket.model;
 
 import jakarta.persistence.*;
 import java.util.List;

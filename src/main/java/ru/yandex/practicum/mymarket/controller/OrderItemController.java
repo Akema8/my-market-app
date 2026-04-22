@@ -1,8 +1,8 @@
-package ru.yandex.practicum.controller;
+package ru.yandex.practicum.mymarket.controller;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
-import ru.yandex.practicum.service.OrderItemService;
+import ru.yandex.practicum.mymarket.service.OrderItemService;
 
 @Controller
 @RequestMapping("/api/order-items")

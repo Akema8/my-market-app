@@ -1,12 +1,8 @@
-package ru.yandex.practicum.controller;
+package ru.yandex.practicum.mymarket.controller;
 
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
-import ru.yandex.practicum.model.Order;
-import ru.yandex.practicum.service.OrderService;
-
-import java.util.List;
+import ru.yandex.practicum.mymarket.service.OrderService;
 
 @Controller
 @RequestMapping("/api/orders")

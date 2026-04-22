@@ -1,10 +1,10 @@
-package ru.yandex.practicum.service;
+package ru.yandex.practicum.mymarket.service;
 
 import org.springframework.stereotype.Service;
-import ru.yandex.practicum.dto.OrderDto;
-import ru.yandex.practicum.mapper.OrderMapper;
-import ru.yandex.practicum.model.Order;
-import ru.yandex.practicum.repository.OrderRepository;
+import ru.yandex.practicum.mymarket.dto.OrderDto;
+import ru.yandex.practicum.mymarket.mapper.OrderMapper;
+import ru.yandex.practicum.mymarket.model.Order;
+import ru.yandex.practicum.mymarket.repository.OrderRepository;
 
 import java.util.List;
 import java.util.Optional;
