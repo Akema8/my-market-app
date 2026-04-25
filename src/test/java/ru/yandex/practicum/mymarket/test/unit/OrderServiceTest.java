@@ -48,8 +48,8 @@ public class OrderServiceTest {
         order2.setId(2L);
         List<Order> orders = Arrays.asList(order1, order2);
 
-        OrderDto dto1 = new OrderDto();
-        OrderDto dto2 = new OrderDto();
+        OrderDto dto1 = new OrderDto(null, null, null);
+        OrderDto dto2 = new OrderDto(null, null, null);
 
         when(orderRepository.findAll()).thenReturn(orders);
         when(orderMapper.toDto(order1)).thenReturn(dto1);
@@ -69,7 +69,7 @@ public class OrderServiceTest {
         Long id = 1L;
         Order order = new Order();
         order.setId(id);
-        OrderDto dto = new OrderDto();
+        OrderDto dto = new OrderDto(null, null, null);
 
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
         when(orderMapper.toDto(order)).thenReturn(dto);

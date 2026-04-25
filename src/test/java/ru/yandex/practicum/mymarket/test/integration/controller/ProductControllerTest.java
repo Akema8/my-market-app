@@ -77,9 +77,7 @@ public class ProductControllerTest {
 
     @Test
     public void testGetItemPage() throws Exception {
-        ProductDto mockProduct = new ProductDto();
-        mockProduct.setId(1L);
-        mockProduct.setTitle("Test Product");
+        ProductDto mockProduct = new ProductDto(1L, "Test Product", null, null, null, 0);
 
         when(productService.getItemById(1L)).thenReturn(mockProduct);
 

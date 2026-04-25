@@ -28,13 +28,8 @@ public class OrderControllerTest {
 
     @Test
     public void testGetOrders() throws Exception {
-        OrderDto order1 = new OrderDto();
-        order1.setId(1L);
-        order1.setTotalSum(20L);
-
-        OrderDto order2 = new OrderDto();
-        order2.setId(2L);
-        order2.setTotalSum(10L);
+        OrderDto order1 = new OrderDto(1L, null, 20L);
+        OrderDto order2 = new OrderDto(2L, null, 10L);
 
         List<OrderDto> mockOrders = Arrays.asList(order1, order2);
 
@@ -49,9 +44,7 @@ public class OrderControllerTest {
 
     @Test
     public void testGetOrderPage() throws Exception {
-        OrderDto mockOrder = new OrderDto();
-        mockOrder.setId(10L);
-        mockOrder.setTotalSum(20L);
+        OrderDto mockOrder = new OrderDto(10L, null, 20L);
 
         when(orderService.getOrderById(10L)).thenReturn(mockOrder);
 

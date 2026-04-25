@@ -72,11 +72,8 @@ public class ProductService {
                 productCounts.put(productId, count);
             }
         }
-        Page<ProductDto> dtoPage = productsPage.map(product -> {
-            ProductDto dto = productMapper.toDto(product);
-            dto.setCount(productCounts.getOrDefault(product.getId(), 0));
-            return dto;
-        });
+        Page<ProductDto> dtoPage = productsPage.map(product -> productMapper.toDto(product)
+                .withCount(productCounts.getOrDefault(product.getId(), 0)));
 
         return dtoPage;
     }
@@ -118,14 +115,10 @@ public class ProductService {
         if (product == null) return null;
         List<Object[]> counts = cartItemRepository.findCountsByProductIds(Collections.singletonList(id));
         if (!counts.isEmpty()) {
-            Object[] row = counts.get(0);
-            Long productId = (Long) row[0];
-            Integer count = ((Number) row[1]).intValue();
-            product.setCount(count);
-        } else {
-            product.setCount(0);
+            Integer count = ((Number) counts.get(0)[1]).intValue();
+            return product.withCount(count);
         }
-        return product;
+        return product.withCount(0);
     }
 
     public List<ProductDto> getItemsInCart() {
@@ -133,10 +126,7 @@ public class ProductService {
         List<ProductDto> productsInCart = new ArrayList<>();
 
         for (CartItem cartItem : cartItems) {
-            Product product = cartItem.getProduct();
-            ProductDto dto = productMapper.toDto(product);
-            dto.setCount(cartItem.getCount());
-            productsInCart.add(dto);
+            productsInCart.add(productMapper.toDto(cartItem.getProduct()).withCount(cartItem.getCount()));
         }
 
         return productsInCart;

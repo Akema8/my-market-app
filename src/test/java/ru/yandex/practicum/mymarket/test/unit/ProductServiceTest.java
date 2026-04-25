@@ -42,9 +42,7 @@ public class ProductServiceTest {
         List<Product> products = List.of(product);
         when(productRepository.findAll()).thenReturn(products);
 
-        ProductDto dto = new ProductDto();
-        dto.setId(1L);
-        dto.setTitle("Product 1");
+        ProductDto dto = new ProductDto(1L, "Product 1", null, null, null, 0);
         when(productMapper.toDto(any(Product.class))).thenReturn(dto);
 
         List<ProductDto> result = productService.getAllProducts();
@@ -62,8 +60,7 @@ public class ProductServiceTest {
         Page<Product> page = new PageImpl<>(List.of(product));
         when(productRepository.findAll(any(PageRequest.class))).thenReturn(page);
 
-        ProductDto dto = new ProductDto();
-        dto.setId(1L);
+        ProductDto dto = new ProductDto(1L, null, null, null, null, 0);
         when(productMapper.toDto(any(Product.class))).thenReturn(dto);
 
         when(cartItemRepository.findCountsByProductIds(anyList()))
@@ -120,8 +117,7 @@ public class ProductServiceTest {
         when(cartItemRepository.findCountsByProductIds(Collections.singletonList(id)))
                 .thenReturn(Collections.singletonList(countData));
 
-        ProductDto dto = new ProductDto();
-        dto.setId(id);
+        ProductDto dto = new ProductDto(id, null, null, null, null, 0);
         when(productMapper.toDto(any(Product.class))).thenReturn(dto);
 
         ProductDto result = productService.getItemById(id);
@@ -139,8 +135,7 @@ public class ProductServiceTest {
         CartItem cartItem = new CartItem(product, 3);
         when(cartItemRepository.findAll()).thenReturn(List.of(cartItem));
 
-        ProductDto dto = new ProductDto();
-        dto.setId(1L);
+        ProductDto dto = new ProductDto(1L, null, null, null, null, 0);
         when(productMapper.toDto(any(Product.class))).thenReturn(dto);
 
         List<ProductDto> result = productService.getItemsInCart();

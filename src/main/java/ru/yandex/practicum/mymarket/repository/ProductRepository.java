@@ -13,7 +13,7 @@ import java.util.List;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> findByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase(String title, String description, Pageable pageable);
-    @Query("SELECT new ru.yandex.practicum.mymarket.dto.ProductDto(p, COALESCE(ci.count, 0)) " +
+    @Query("SELECT new ru.yandex.practicum.mymarket.dto.ProductDto(p.id, p.title, p.description, p.imgPath, p.price, COALESCE(ci.count, 0)) " +
             "FROM Product p LEFT JOIN CartItem ci ON p = ci.product")
     List<ProductDto> findAllWithCartCount();
 }
