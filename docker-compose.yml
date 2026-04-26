@@ -8,9 +8,9 @@ services:
     depends_on:
       - db
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/${MYSQL_DATABASE}
-      - SPRING_DATASOURCE_USERNAME=${DB_USERNAME}
-      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_R2DBC_URL=r2dbc:mysql://db:3306/${MYSQL_DATABASE}
+      - SPRING_R2DBC_USERNAME=${DB_USERNAME}
+      - SPRING_R2DBC_PASSWORD=${DB_PASSWORD}
 
   db:
     image: mysql:8.0
