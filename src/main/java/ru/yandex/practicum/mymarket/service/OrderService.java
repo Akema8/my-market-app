@@ -1,70 +1,108 @@
 package ru.yandex.practicum.mymarket.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
-import ru.yandex.practicum.mymarket.mapper.OrderMapper;
-import ru.yandex.practicum.mymarket.model.CartItem;
+import ru.yandex.practicum.mymarket.dto.OrderItemDto;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
+import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
+import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 @Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final OrderMapper orderMapper;
+    private final OrderItemRepository orderItemRepository;
     private final CartItemRepository cartItemRepository;
+    private final ProductRepository productRepository;
 
-    public OrderService(OrderRepository orderRepository, OrderMapper orderMapper, CartItemRepository cartItemRepository) {
+    public OrderService(OrderRepository orderRepository, OrderItemRepository orderItemRepository, CartItemRepository cartItemRepository, ProductRepository productRepository) {
         this.orderRepository = orderRepository;
-        this.orderMapper = orderMapper;
+        this.orderItemRepository = orderItemRepository;
         this.cartItemRepository = cartItemRepository;
+        this.productRepository = productRepository;
     }
 
-    public List<OrderDto> getAllOrders() {
-        List<Order> orders = orderRepository.findAll();
-        return orders.stream()
-                .map(orderMapper::toDto)
-                .toList();
+    public Flux<OrderDto> getAllOrders() {
+
+        return orderRepository.findAll().flatMap(this::assembleOrderDto);
     }
 
-    public OrderDto getOrderById(Long id) {
-        return orderRepository.findById(id)
-                .map(orderMapper::toDto)
-                .orElse(null);
+    public Mono<OrderDto> getOrderById(Long id) {
+
+        return orderRepository.findById(id).flatMap(this::assembleOrderDto);
     }
 
-    public long createOrder() {
-        List<CartItem> cartItems = cartItemRepository.findAll();
+    @Transactional
+    public Mono<Long> createOrder() {
+        return cartItemRepository.findAll()
+                .collectList()
+                .flatMap(cartItems -> {
+                    List<Long> productIds = cartItems.stream()
+                            .map(ci -> ci.getProductId())
+                            .toList();
 
-        List<OrderItem> orderItems = cartItems
-                .stream()
-                .map(cartItem -> {
-            OrderItem orderItem = new OrderItem();
-            orderItem.setProduct(cartItem.getProduct());
-            orderItem.setCount(cartItem.getCount());
-            orderItem.setPrice(cartItem.getProduct().getPrice());
-            return orderItem;
-        }).toList();
-        Long totalSum = orderItems.stream()
-                .mapToLong(oi -> oi.getPrice() * oi.getCount())
-                .sum();
+                    return productRepository.findAllById(productIds)
+                            .collectMap(p -> p.getId())
+                            .flatMap(productMap -> {
+                                long totalSum = cartItems.stream()
+                                        .mapToLong(ci -> productMap.get(ci.getProductId()).getPrice() * ci.getCount())
+                                        .sum();
 
-        Order order = new Order();
-        order.setItems(orderItems);
-        order.setTotalSum(totalSum);
-        orderItems.forEach(oi -> oi.setOrder(order));
-        Order savedOrder = orderRepository.save(order);
-        cartItemRepository.deleteAll(cartItems);
-        return savedOrder.getId();
+                                Order order = new Order(totalSum);
+                                return orderRepository.save(order)
+                                        .flatMap(savedOrder -> {
+                                            List<OrderItem> items = cartItems.stream()
+                                                    .map(ci -> {
+                                                        OrderItem oi = new OrderItem();
+                                                        oi.setOrderId(savedOrder.getId());
+                                                        oi.setProductId(ci.getProductId());
+                                                        oi.setCount(ci.getCount());
+                                                        oi.setPrice(productMap.get(ci.getProductId()).getPrice());
+                                                        return oi;
+                                                    })
+                                                    .toList();
+                                            return orderItemRepository.saveAll(items)
+                                                    .then(cartItemRepository.deleteAll(cartItems))
+                                                    .thenReturn(savedOrder.getId());
+                                        });
+                            });
+                });
     }
 
-    public void deleteOrder(Long id) {
-        orderRepository.deleteById(id);
+    public Mono<Void> deleteOrder(Long id) {
+        return orderRepository.deleteById(id);
+    }
+
+    private Mono<OrderDto> assembleOrderDto(Order order) {
+        return orderItemRepository.findByOrderId(order.getId())
+                .collectList()
+                .flatMap(items -> {
+                    List<Long> productIds = items.stream().map(OrderItem::getProductId).toList();
+                    if (productIds.isEmpty()) {
+                        return Mono.just(new OrderDto(order.getId(), List.of(), order.getTotalSum()));
+                    }
+                    return productRepository.findAllById(productIds)
+                            .collectMap(p -> p.getId())
+                            .map((Map<Long, ru.yandex.practicum.mymarket.model.Product> productMap) -> {
+                                List<OrderItemDto> itemDtos = items.stream()
+                                        .map(oi -> new OrderItemDto(
+                                                oi.getId(),
+                                                productMap.get(oi.getProductId()).getTitle(),
+                                                oi.getCount(),
+                                                oi.getPrice()
+                                        ))
+                                        .toList();
+                                return new OrderDto(order.getId(), itemDtos, order.getTotalSum());
+                            });
+                });
     }
 }
