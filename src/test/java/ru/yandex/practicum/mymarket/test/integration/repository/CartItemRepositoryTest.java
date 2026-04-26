@@ -1,87 +1,69 @@
 package ru.yandex.practicum.mymarket.test.integration.repository;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
+@DataR2dbcTest
 public class CartItemRepositoryTest {
+
     @Autowired
     private CartItemRepository cartItemRepository;
 
     @Autowired
     private ProductRepository productRepository;
 
-    @Test
-    public void testFindByProductId() {
-        Product product = new Product();
-        product.setTitle("Test Product");
-        productRepository.save(product);
-
-        CartItem cartItem = new CartItem();
-        cartItem.setProduct(product);
-        cartItem.setCount(3);
-        cartItemRepository.save(cartItem);
-
-        // вызов метода
-        Optional<CartItem> found = cartItemRepository.findByProduct_Id(product.getId());
-
-        // проверки
-        assertThat(found).isPresent();
-        assertThat(found.get().getProduct().getId()).isEqualTo(product.getId());
-        assertThat(found.get().getCount()).isEqualTo(3);
+    @BeforeEach
+    public void setUp() {
+        cartItemRepository.deleteAll().block();
+        productRepository.deleteAll().block();
     }
 
     @Test
-    public void testFindCountsByProductIds() {
-        Product product1 = new Product();
-        product1.setTitle("Product 1");
-        productRepository.save(product1);
+    public void testFindByProductId() {
+        Product product = new Product("Test Product", "Desc", "img.jpg", 100L);
 
-        Product product2 = new Product();
-        product2.setTitle("Product 2");
-        productRepository.save(product2);
+        Long productId = productRepository.save(product).block().getId();
 
-        CartItem item1 = new CartItem();
-        item1.setProduct(product1);
-        item1.setCount(2);
-        cartItemRepository.save(item1);
+        CartItem cartItem = new CartItem(productId, 3);
+        cartItemRepository.save(cartItem).block();
 
-        CartItem item2 = new CartItem();
-        item2.setProduct(product2);
-        item2.setCount(5);
-        cartItemRepository.save(item2);
+        StepVerifier.create(cartItemRepository.findByProductId(productId))
+                .assertNext(found -> {
+                    assertThat(found.getProductId()).isEqualTo(productId);
+                    assertThat(found.getCount()).isEqualTo(3);
+                })
+                .verifyComplete();
+    }
 
-        CartItem item3 = new CartItem();
-        item3.setProduct(product1);
-        item3.setCount(4);
-        cartItemRepository.save(item3);
+    @Test
+    public void testFindByProductIdIn() {
+        Product product1 = new Product("Product 1", "Desc1", "img1.jpg", 100L);
+        Product product2 = new Product("Product 2", "Desc2", "img2.jpg", 200L);
 
-        List<Object[]> results = cartItemRepository.findCountsByProductIds(
-                Arrays.asList(product1.getId(), product2.getId())
-        );
+        Long productId1 = productRepository.save(product1).block().getId();
+        Long productId2 = productRepository.save(product2).block().getId();
 
-        assertThat(results).hasSize(2);
+        CartItem item1 = new CartItem(productId1, 2);
+        CartItem item2 = new CartItem(productId2, 5);
+        CartItem item3 = new CartItem(productId1, 4);
 
-        for (Object[] row : results) {
-            Long productId = (Long) row[0];
-            Long totalCount = (Long) row[1];
+        cartItemRepository.save(item1).block();
+        cartItemRepository.save(item2).block();
+        cartItemRepository.save(item3).block();
 
-            if (productId.equals(product1.getId())) {
-                assertThat(totalCount).isEqualTo(6); // 2 + 4
-            } else if (productId.equals(product2.getId())) {
-                assertThat(totalCount).isEqualTo(5);
-            }
-        }
+        StepVerifier.create(cartItemRepository.findByProductIdIn(List.of(productId1, productId2)))
+                .expectNextCount(3)
+                .verifyComplete();
     }
 }
