@@ -1,8 +1,15 @@
 # my-market-app
 
-Веб-приложение «Витрина интернет-магазина» на Spring Boot с реактивным стеком (WebFlux + R2DBC) и серверным рендерингом через Thymeleaf.
+Мультимодульный Maven-проект на Spring Boot с реактивным стеком (WebFlux + R2DBC).
 
-## Функциональность
+## Модули
+
+| Модуль | Описание | Порт |
+|---|---|---|
+| **market-web** | Веб-приложение «Витрина интернет-магазина» с Thymeleaf | 8080 |
+| **payment-service** | RESTful-сервис платежей (структура создана, реализация в разработке) | 8081 |
+
+## Функциональность (market-web)
 
 - Витрина товаров с поиском по названию/описанию, сортировкой (по цене, по алфавиту) и пагинацией (2 / 5 / 10 / 20 / 50 / 100 товаров на странице)
 - Страница отдельного товара
@@ -86,14 +93,21 @@ MYSQL_PASSWORD=your_user_password_here
 ### Локально (требуется MySQL на `localhost:3306`)
 
 ```bash
-# Сборка
+# Сборка всех модулей
 ./mvnw clean package
 
-# Запуск (переменные окружения должны быть установлены)
-java -jar target/my-market-app-0.0.1-SNAPSHOT.jar
+# Сборка конкретного модуля
+./mvnw clean package -pl market-web
+./mvnw clean package -pl payment-service
+
+# Запуск market-web (переменные окружения должны быть установлены)
+java -jar market-web/target/market-web-0.0.1-SNAPSHOT.jar
+
+# Запуск payment-service
+java -jar payment-service/target/payment-service-0.0.1-SNAPSHOT.jar
 ```
 
-Приложение будет доступно на `http://localhost:8080`.
+Приложение market-web будет доступно на `http://localhost:8080`.
 
 ### Docker Compose (рекомендуется)
 
@@ -122,20 +136,25 @@ docker-compose down -v
 
 ## Тесты
 
-Тесты используют H2 in-memory через R2DBC — MySQL не требуется. Схема инициализируется из `src/test/resources/schema.sql`.
+Тесты используют H2 in-memory через R2DBC — MySQL не требуется. Схема инициализируется из `market-web/src/test/resources/schema.sql`.
 
 ```bash
-# Все тесты
+# Все тесты во всех модулях
 ./mvnw test
 
-# Один класс
-./mvnw test -Dtest=ProductServiceTest
+# Тесты конкретного модуля
+./mvnw test -pl market-web
+./mvnw test -pl payment-service
+
+# Один класс в модуле
+./mvnw test -pl market-web -Dtest=ProductServiceTest
 
 # Один метод
-./mvnw test -Dtest=ProductServiceTest#methodName
+./mvnw test -pl market-web -Dtest=ProductServiceTest#methodName
 ```
 
-| Путь | Тип | Инструменты |
-|---|---|---|
-| `test/unit/` | Юнит-тесты | JUnit 5, Mockito, AssertJ, Reactor Test (StepVerifier) |
-| `test/integration/` | Интеграционные тесты | `@WebFluxTest` + WebTestClient, `@DataR2dbcTest` |
+| Модуль | Путь | Тип | Инструменты |
+|---|---|---|---|
+| market-web | `test/unit/` | Юнит-тесты | JUnit 5, Mockito, AssertJ, Reactor Test (StepVerifier) |
+| market-web | `test/integration/` | Интеграционные тесты | `@WebFluxTest` + WebTestClient, `@DataR2dbcTest` |
+| payment-service | - | Не реализовано | - |
