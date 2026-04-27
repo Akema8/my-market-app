@@ -1,6 +1,6 @@
 # my-market-app
 
-Веб-приложение «Витрина интернет-магазина» на Spring Boot с серверным рендерингом через Thymeleaf.
+Веб-приложение «Витрина интернет-магазина» на Spring Boot с реактивным стеком (WebFlux + R2DBC) и серверным рендерингом через Thymeleaf.
 
 ## Функциональность
 
@@ -16,22 +16,26 @@
 |---|---|
 | Язык | Java 21 |
 | Фреймворк | Spring Boot 3.1 |
+| Веб | Spring WebFlux (реактивный) |
 | Шаблоны | Thymeleaf |
-| ORM | Spring Data JPA / Hibernate |
-| БД (prod) | MySQL 8 |
-| БД (тесты) | H2 (in-memory) |
+| Реактивные типы | Project Reactor (Mono, Flux) |
+| Доступ к БД | Spring Data R2DBC |
+| БД (prod) | MySQL 8 (через R2DBC MySQL driver) |
+| БД (тесты) | H2 (in-memory, через R2DBC H2) |
 | Маппинг DTO | MapStruct 1.6.3 |
 
 ## Архитектура
 
 ```
-controller/   — Spring MVC контроллеры (Thymeleaf + REST)
-service/      — бизнес-логика, пагинация, агрегация корзины
-repository/   — Spring Data JPA репозитории
-model/        — JPA-сущности: Product, CartItem, Order, OrderItem
+controller/   — Spring WebFlux контроллеры (Thymeleaf + реактивные эндпоинты)
+service/      — бизнес-логика, пагинация, агрегация корзины (реактивная)
+repository/   — Spring Data R2DBC репозитории
+model/        — R2DBC сущности: Product, CartItem, Order, OrderItem
 dto/          — DTO, включая Paging для состояния пагинации
 mapper/       — MapStruct-маппер
 ```
+
+Все слои используют реактивные типы `Mono<T>` и `Flux<T>` из Project Reactor.
 
 ## Маршруты
 
@@ -64,7 +68,7 @@ cp .env.example .env
 Содержимое `.env`:
 
 ```
-DB_URL=jdbc:mysql://localhost:3306/my_market?useSSL=false&serverTimezone=UTC
+R2DBC_URL=r2dbc:mysql://localhost:3306/my_market?connectionTimeZone=UTC
 DB_USERNAME=root
 DB_PASSWORD=your_password_here
 
@@ -74,6 +78,8 @@ MYSQL_DATABASE=my_market
 MYSQL_USER=user
 MYSQL_PASSWORD=your_user_password_here
 ```
+
+**Важно**: Для R2DBC используется префикс `r2dbc:mysql://` вместо `jdbc:mysql://`, а параметр часового пояса — `connectionTimeZone` вместо `serverTimezone`.
 
 ## Сборка и запуск
 
@@ -116,7 +122,7 @@ docker-compose down -v
 
 ## Тесты
 
-Тесты используют H2 in-memory — MySQL не требуется. Схема инициализируется из `src/test/resources/schema.sql`, данные — из `src/test/resources/data.sql`.
+Тесты используют H2 in-memory через R2DBC — MySQL не требуется. Схема инициализируется из `src/test/resources/schema.sql`.
 
 ```bash
 # Все тесты
@@ -131,5 +137,5 @@ docker-compose down -v
 
 | Путь | Тип | Инструменты |
 |---|---|---|
-| `test/unit/` | Юнит-тесты | JUnit 5, Mockito, AssertJ |
-| `test/integration/` | Интеграционные тесты | `@WebMvcTest` + MockMvc, `@DataJpaTest` |
+| `test/unit/` | Юнит-тесты | JUnit 5, Mockito, AssertJ, Reactor Test (StepVerifier) |
+| `test/integration/` | Интеграционные тесты | `@WebFluxTest` + WebTestClient, `@DataR2dbcTest` |

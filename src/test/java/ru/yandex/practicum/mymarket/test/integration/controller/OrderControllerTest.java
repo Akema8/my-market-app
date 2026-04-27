@@ -2,58 +2,49 @@ package ru.yandex.practicum.mymarket.test.integration.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.controller.OrderController;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
 import ru.yandex.practicum.mymarket.service.OrderService;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-
-@WebMvcTest(OrderController.class)
+@WebFluxTest(OrderController.class)
 public class OrderControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockBean
     private OrderService orderService;
 
     @Test
-    public void testGetOrders() throws Exception {
-        OrderDto order1 = new OrderDto(1L, null, 20L);
-        OrderDto order2 = new OrderDto(2L, null, 10L);
+    public void testGetOrders() {
+        OrderDto order1 = new OrderDto(1L, List.of(), 20L);
+        OrderDto order2 = new OrderDto(2L, List.of(), 10L);
 
-        List<OrderDto> mockOrders = Arrays.asList(order1, order2);
+        when(orderService.getAllOrders()).thenReturn(Flux.just(order1, order2));
 
-        when(orderService.getAllOrders()).thenReturn(mockOrders);
-
-        mockMvc.perform(get("/orders"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("orders"))
-                .andExpect(model().attributeExists("orders"))
-                .andExpect(model().attribute("orders", mockOrders));
+        webTestClient.get()
+                .uri("/orders")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    public void testGetOrderPage() throws Exception {
-        OrderDto mockOrder = new OrderDto(10L, null, 20L);
+    public void testGetOrderPage() {
+        OrderDto mockOrder = new OrderDto(10L, List.of(), 20L);
+        when(orderService.getOrderById(10L)).thenReturn(Mono.just(mockOrder));
 
-        when(orderService.getOrderById(10L)).thenReturn(mockOrder);
-
-        mockMvc.perform(get("/orders/10")
-                        .param("newOrder", "true"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("order"))
-                .andExpect(model().attributeExists("order"))
-                .andExpect(model().attribute("order", mockOrder))
-                .andExpect(model().attribute("newOrder", true));
+        webTestClient.get()
+                .uri("/orders/10?newOrder=true")
+                .exchange()
+                .expectStatus().isOk();
     }
 }

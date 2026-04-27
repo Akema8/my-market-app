@@ -1,134 +1,153 @@
 package ru.yandex.practicum.mymarket.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
 import ru.yandex.practicum.mymarket.mapper.ProductMapper;
 import ru.yandex.practicum.mymarket.model.CartItem;
-import ru.yandex.practicum.mymarket.model.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class ProductService {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
     private final ProductRepository productRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductMapper productMapper;
 
     public ProductService(ProductRepository productRepository, ProductMapper productMapper, CartItemRepository cartItemRepository) {
-
         this.productRepository = productRepository;
         this.productMapper = productMapper;
         this.cartItemRepository = cartItemRepository;
     }
 
-    public List<ProductDto> getAllProducts() {
-        List<Product> products = productRepository.findAll();
-        return products.stream()
-                .map(productMapper::toDto)
-                .collect(Collectors.toList());
+    public Flux<ProductDto> getAllProducts() {
+
+        return productRepository.findAll().map(productMapper::toDto);
     }
 
-    public Page<ProductDto> findItems(String search, String sort, int pageNumber, int pageSize) {
-        Sort sorting;
-        switch (sort) {
-            case "ALPHA":
-                sorting = Sort.by("title").ascending();
-                break;
-            case "PRICE":
-                sorting = Sort.by("price").ascending();
-                break;
-            case "NO":
-            default:
-                sorting = Sort.unsorted();
-                break;
-        }
+    public Mono<Page<ProductDto>> findItems(String search, String sort, int pageNumber, int pageSize) {
+        Sort sorting = buildSort(sort);
+        PageRequest pageable = PageRequest.of(pageNumber - 1, pageSize, sorting);
 
-        PageRequest pageRequest = PageRequest.of(pageNumber - 1, pageSize, sorting);
-        Page<Product> productsPage;
-        if (search == null || search.trim().isEmpty()) {
-            productsPage = productRepository.findAll(pageRequest);
+        Flux<ru.yandex.practicum.mymarket.model.Product> productFlux;
+        Mono<Long> countMono;
+
+        if (search == null || search.isBlank()) {
+            productFlux = productRepository.findAllBy(pageable);
+            countMono = productRepository.count();
         } else {
-            String searchPattern = "%" + search.trim().toLowerCase() + "%";
-            productsPage = productRepository.findByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase(search, search, pageRequest);
+            productFlux = productRepository
+                    .findByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase(search, search, pageable);
+            countMono = productRepository
+                    .countByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase(search, search);
         }
-        List<Long> productIds = productsPage
-                .stream()
-                .map(Product::getId)
-                .toList();
 
-        Map<Long, Integer> productCounts = new HashMap<>();
-        if (!productIds.isEmpty()) {
-            List<Object[]> counts = cartItemRepository.findCountsByProductIds(productIds);
-            for (Object[] row : counts) {
-                Long productId = (Long) row[0];
-                Integer count = ((Number) row[1]).intValue();
-                productCounts.put(productId, count);
-            }
-        }
-        Page<ProductDto> dtoPage = productsPage.map(product -> productMapper.toDto(product)
-                .withCount(productCounts.getOrDefault(product.getId(), 0)));
+        return productFlux
+                .collectList()
+                .zipWith(countMono)
+                .flatMap(tuple -> {
+                    List<ru.yandex.practicum.mymarket.model.Product> products = tuple.getT1();
+                    long total = tuple.getT2();
+                    List<Long> ids = products.stream()
+                            .map(ru.yandex.practicum.mymarket.model.Product::getId)
+                            .toList();
 
-        return dtoPage;
+                    if (ids.isEmpty()) {
+                        return Mono.just((Page<ProductDto>) new PageImpl<ProductDto>(List.of(), pageable, 0));
+                    }
+
+                    return cartItemRepository.findByProductIdIn(ids)
+                            .collectList()
+                            .map(cartItems -> {
+                                Map<Long, Integer> counts = cartItems.stream()
+                                        .collect(Collectors.groupingBy(
+                                                CartItem::getProductId,
+                                                Collectors.summingInt(CartItem::getCount)));
+                                List<ProductDto> dtos = products.stream()
+                                        .map(p -> productMapper.toDto(p)
+                                                .withCount(counts.getOrDefault(p.getId(), 0)))
+                                        .toList();
+                                return (Page<ProductDto>) new PageImpl<>(dtos, pageable, total);
+                            });
+                });
     }
 
-    public boolean changeItemQuantity(Long productId, String action) {
-        Optional<Product> itemOpt = productRepository.findById(productId);
-        if (!itemOpt.isPresent()) {
-            return false;
-        }
-        Product item = itemOpt.get();
+    public Mono<Void> changeItemQuantity(Long productId, String action) {
+        log.info("changeItemQuantity called: productId={}, action={}", productId, action);
+        return productRepository.findById(productId)
+                .doOnNext(p -> log.info("Found product: {}", p.getId()))
+                .flatMap(product ->
+                        cartItemRepository.findByProductId(productId)
+                                .doOnNext(ci -> log.info("Found cartItem: id={}, count={}", ci.getId(), ci.getCount()))
+                                .defaultIfEmpty(new CartItem(productId, 0))
+                                .doOnNext(ci -> log.info("After defaultIfEmpty: id={}, productId={}, count={}", ci.getId(), ci.getProductId(), ci.getCount()))
+                                .flatMap(cartItem -> {
+                                    int current = cartItem.getCount();
+                                    if ("PLUS".equals(action)) {
+                                        cartItem.setCount(current + 1);
+                                        log.info("PLUS action: saving cartItem with count={}", cartItem.getCount());
+                                        return cartItemRepository.save(cartItem)
+                                                .doOnSuccess(saved -> log.info("Saved cartItem: id={}", saved.getId()))
+                                                .doOnError(e -> log.error("Error saving cartItem", e))
+                                                .then();
+                                    } else if ("MINUS".equals(action)) {
+                                        if (current > 1) {
+                                            cartItem.setCount(current - 1);
+                                            log.info("MINUS action: saving cartItem with count={}", cartItem.getCount());
+                                            return cartItemRepository.save(cartItem).then();
+                                        } else if (cartItem.getId() != null) {
+                                            log.info("MINUS action: deleting cartItem");
+                                            return cartItemRepository.delete(cartItem);
+                                        }
+                                    }
+                                    else if ("DELETE".equals(action)) {
+                                        return cartItemRepository.delete(cartItem);
+                                    }
 
-        CartItem cartItem = cartItemRepository.findByProduct_Id(productId)
-                .orElseGet(() -> new CartItem(item, 0));
-
-        int currentQuantity = cartItem.getCount();
-
-        if (action.equals("PLUS")) {
-            cartItem.setCount(currentQuantity + 1);
-        } else if (action.equals("MINUS")) {
-            if (currentQuantity > 1) {
-                cartItem.setCount(currentQuantity - 1);
-            } else {
-                cartItemRepository.delete(cartItem);
-                return true;
-            }
-        } else {
-            return false;
-        }
-        cartItemRepository.save(cartItem);
-        return true;
+                                    return Mono.empty();
+                                })
+                )
+                .doOnError(e -> log.error("Error in changeItemQuantity", e))
+                .then();
     }
 
-    public ProductDto getItemById(Long id) {
-        ProductDto product = productRepository.findById(id)
+    public Mono<ProductDto> getItemById(Long id) {
+        return productRepository.findById(id)
                 .map(productMapper::toDto)
-                .orElse(null);
-        ;
-
-        if (product == null) return null;
-        List<Object[]> counts = cartItemRepository.findCountsByProductIds(Collections.singletonList(id));
-        if (!counts.isEmpty()) {
-            Integer count = ((Number) counts.get(0)[1]).intValue();
-            return product.withCount(count);
-        }
-        return product.withCount(0);
+                .flatMap(dto ->
+                        cartItemRepository.findByProductId(id)
+                                .map(ci -> dto.withCount(ci.getCount()))
+                                .defaultIfEmpty(dto.withCount(0))
+                );
     }
 
-    public List<ProductDto> getItemsInCart() {
-        List<CartItem> cartItems = cartItemRepository.findAll();
-        List<ProductDto> productsInCart = new ArrayList<>();
+    public Flux<ProductDto> getItemsInCart() {
+        return cartItemRepository.findAll()
+                .flatMap(cartItem ->
+                        productRepository.findById(cartItem.getProductId())
+                                .map(product -> productMapper.toDto(product).withCount(cartItem.getCount()))
+                );
+    }
 
-        for (CartItem cartItem : cartItems) {
-            productsInCart.add(productMapper.toDto(cartItem.getProduct()).withCount(cartItem.getCount()));
-        }
-
-        return productsInCart;
+    private Sort buildSort(String sort) {
+        return switch (sort) {
+            case "ALPHA" -> Sort.by("title").ascending();
+            case "PRICE" -> Sort.by("price").ascending();
+            default -> Sort.unsorted();
+        };
     }
 }

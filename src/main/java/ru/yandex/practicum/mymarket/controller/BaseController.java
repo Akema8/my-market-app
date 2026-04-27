@@ -3,6 +3,7 @@ package ru.yandex.practicum.mymarket.controller;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.OrderService;
 
 @Controller
@@ -16,8 +17,8 @@ public class BaseController {
     }
 
     @PostMapping("/buy")
-    public String buyOrder() {
-        long orderId = orderService.createOrder();
-        return "redirect:/orders/" + orderId + "?newOrder=true";
+    public Mono<String> buyOrder() {
+        return orderService.createOrder()
+                .map(orderId -> "redirect:/orders/" + orderId + "?newOrder=true");
     }
 }

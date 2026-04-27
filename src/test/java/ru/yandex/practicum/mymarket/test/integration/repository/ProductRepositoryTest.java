@@ -1,59 +1,78 @@
 package ru.yandex.practicum.mymarket.test.integration.repository;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import ru.yandex.practicum.mymarket.dto.ProductDto;
-import ru.yandex.practicum.mymarket.model.CartItem;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.model.Product;
-import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
-import java.util.List;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
-
-@DataJpaTest
+@DataR2dbcTest
 public class ProductRepositoryTest {
+
     @Autowired
     private ProductRepository productRepository;
-    @Autowired
-    private CartItemRepository cartItemRepository;
 
-    @Test
-    public void testFindByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase() {
-        Product product1 = new Product();
-        product1.setTitle("Test Product");
-        product1.setDescription("A product for testing");
-        productRepository.save(product1);
-
-        Product product2 = new Product();
-        product2.setTitle("Another Product");
-        product2.setDescription("Contains Test");
-        productRepository.save(product2);
-
-        Pageable pageable = PageRequest.of(0, 10);
-        var results = productRepository.findByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase("test", "test", pageable);
-
-        assertThat(results).hasSize(2);
-        assertThat(results.getContent()).extracting("title").containsExactlyInAnyOrder("Test Product", "Another Product");
+    @BeforeEach
+    public void setUp() {
+        productRepository.deleteAll().block();
     }
 
     @Test
-    public void testFindAllWithCartCount() {
-        Product product = new Product();
-        product.setTitle("Product with Cart");
-        product.setDescription("Description");
-        productRepository.save(product);
+    public void testFindByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase() {
+        Product product1 = new Product("Test Product", "A product for testing", "img1.jpg", 100L);
+        Product product2 = new Product("Another Product", "Contains Test", "img2.jpg", 200L);
 
-        CartItem cartItem = new CartItem();
-        cartItem.setProduct(product);
-        cartItem.setCount(3);
-        cartItemRepository.save(cartItem);
+        productRepository.save(product1).block();
+        productRepository.save(product2).block();
 
-        List<ProductDto> dtos = productRepository.findAllWithCartCount();
-        assertThat(dtos).anyMatch(dto -> dto.id().equals(product.getId()) && dto.count() == 3);
+        Pageable pageable = PageRequest.of(0, 10);
+
+        StepVerifier.create(
+                productRepository.findByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase(
+                        "test", "test", pageable)
+        )
+                .expectNextCount(2)
+                .verifyComplete();
+    }
+
+    @Test
+    public void testFindAllBy() {
+        Product product1 = new Product("Product A", "Description A", "img1.jpg", 100L);
+        Product product2 = new Product("Product B", "Description B", "img2.jpg", 200L);
+        Product product3 = new Product("Product C", "Description C", "img3.jpg", 300L);
+
+        productRepository.save(product1).block();
+        productRepository.save(product2).block();
+        productRepository.save(product3).block();
+
+        Pageable pageable = PageRequest.of(0, 2);
+
+        StepVerifier.create(productRepository.findAllBy(pageable))
+                .expectNextCount(2)
+                .verifyComplete();
+    }
+
+    @Test
+    public void testCountByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase() {
+        Product product1 = new Product("Special Product", "Desc", "img1.jpg", 100L);
+        Product product2 = new Product("Another", "Special description", "img2.jpg", 200L);
+        Product product3 = new Product("Regular", "Regular desc", "img3.jpg", 150L);
+
+        productRepository.save(product1).block();
+        productRepository.save(product2).block();
+        productRepository.save(product3).block();
+
+        StepVerifier.create(
+                productRepository.countByTitleContainsIgnoreCaseOrDescriptionContainsIgnoreCase(
+                        "special", "special")
+        )
+                .assertNext(count -> assertThat(count).isEqualTo(2L))
+                .verifyComplete();
     }
 }
