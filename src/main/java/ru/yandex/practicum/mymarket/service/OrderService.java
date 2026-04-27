@@ -6,8 +6,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
 import ru.yandex.practicum.mymarket.dto.OrderItemDto;
+import ru.yandex.practicum.mymarket.model.CartItem;
 import ru.yandex.practicum.mymarket.model.Order;
 import ru.yandex.practicum.mymarket.model.OrderItem;
+import ru.yandex.practicum.mymarket.model.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderItemRepository;
 import ru.yandex.practicum.mymarket.repository.OrderRepository;
@@ -47,11 +49,11 @@ public class OrderService {
                 .collectList()
                 .flatMap(cartItems -> {
                     List<Long> productIds = cartItems.stream()
-                            .map(ci -> ci.getProductId())
+                            .map(CartItem::getProductId)
                             .toList();
 
                     return productRepository.findAllById(productIds)
-                            .collectMap(p -> p.getId())
+                            .collectMap(Product::getId)
                             .flatMap(productMap -> {
                                 long totalSum = cartItems.stream()
                                         .mapToLong(ci -> productMap.get(ci.getProductId()).getPrice() * ci.getCount())
