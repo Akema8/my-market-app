@@ -5,7 +5,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.controller.ProductController;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
@@ -65,5 +68,55 @@ public class ProductControllerTest {
                 .uri("/items/1")
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    @Test
+    public void testChangeItemQuantity_WithSpecialCharactersInSearch() {
+        when(productService.changeItemQuantity(anyLong(), anyString()))
+                .thenReturn(Mono.empty());
+
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("id", "1");
+        formData.add("action", "PLUS");
+        formData.add("search", "test & value=123");
+        formData.add("sort", "PRICE");
+        formData.add("pageNumber", "2");
+        formData.add("pageSize", "10");
+
+        webTestClient.post()
+                .uri("/items")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue(formData)
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().valueEquals("Location", "/items?search=test%20%26%20value%3D123&sort=PRICE&pageNumber=2&pageSize=10");
+    }
+
+    @Test
+    public void testChangeItemQuantity_WithCyrillicAndSpecialChars() {
+        when(productService.changeItemQuantity(anyLong(), anyString()))
+                .thenReturn(Mono.empty());
+
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("id", "2");
+        formData.add("action", "MINUS");
+        formData.add("search", "товар №1+налог");
+        formData.add("sort", "NAME");
+        formData.add("pageNumber", "1");
+        formData.add("pageSize", "5");
+
+        webTestClient.post()
+                .uri("/items")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue(formData)
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().value("Location", location ->
+                        org.assertj.core.api.Assertions.assertThat(location)
+                                .contains("search=")
+                                .contains("sort=NAME")
+                                .contains("pageNumber=1")
+                                .contains("pageSize=5")
+                );
     }
 }

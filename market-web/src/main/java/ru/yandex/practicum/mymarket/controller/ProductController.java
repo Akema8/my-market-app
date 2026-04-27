@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartItemForm;
 import ru.yandex.practicum.mymarket.dto.ChangeQuantityForm;
@@ -62,9 +63,17 @@ public class ProductController {
         Integer pageNumber = form.getPageNumber() != null ? form.getPageNumber() : 1;
         Integer pageSize = form.getPageSize() != null ? form.getPageSize() : 5;
 
+        String redirectUrl = UriComponentsBuilder.fromPath("/items")
+                .queryParam("search", search)
+                .queryParam("sort", sort)
+                .queryParam("pageNumber", pageNumber)
+                .queryParam("pageSize", pageSize)
+                .encode()
+                .build()
+                .toUriString();
+
         return productService.changeItemQuantity(form.getId(), form.getAction())
-                .thenReturn("redirect:/items?search=" + search + "&sort=" + sort
-                        + "&pageNumber=" + pageNumber + "&pageSize=" + pageSize);
+                .thenReturn("redirect:" + redirectUrl);
     }
 
     @GetMapping("/{id}")
