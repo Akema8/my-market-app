@@ -2,6 +2,8 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -12,6 +14,7 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
 import ru.yandex.practicum.mymarket.mapper.ProductMapper;
 import ru.yandex.practicum.mymarket.model.CartItem;
+import ru.yandex.practicum.mymarket.model.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
@@ -35,11 +38,21 @@ public class ProductService {
     }
 
     public Flux<ProductDto> getAllProducts() {
-
         return productRepository.findAll().map(productMapper::toDto);
     }
 
+    @Cacheable(
+        value = "products",
+        key = "(#search ?: 'all') + ':' + #sort + ':' + #pageNumber + ':' + #pageSize",
+        unless = "#result == null"
+    )
     public Mono<Page<ProductDto>> findItems(String search, String sort, int pageNumber, int pageSize) {
+        log.info("Loading from DB: search={}, sort={}, page={}, size={}", search, sort, pageNumber, pageSize);
+        return loadFromDatabase(search, sort, pageNumber, pageSize)
+                .cache();
+    }
+
+    private Mono<Page<ProductDto>> loadFromDatabase(String search, String sort, int pageNumber, int pageSize) {
         Sort sorting = buildSort(sort);
         PageRequest pageable = PageRequest.of(pageNumber - 1, pageSize, sorting);
 
@@ -63,7 +76,7 @@ public class ProductService {
                     List<ru.yandex.practicum.mymarket.model.Product> products = tuple.getT1();
                     long total = tuple.getT2();
                     List<Long> ids = products.stream()
-                            .map(ru.yandex.practicum.mymarket.model.Product::getId)
+                            .map(Product::getId)
                             .toList();
 
                     if (ids.isEmpty()) {
@@ -86,6 +99,7 @@ public class ProductService {
                 });
     }
 
+    @CacheEvict(value = {"products", "product", "cart"}, allEntries = true)
     public Mono<Void> changeItemQuantity(Long productId, String action) {
         log.info("changeItemQuantity called: productId={}, action={}", productId, action);
         return productRepository.findById(productId)
@@ -125,22 +139,28 @@ public class ProductService {
                 .then();
     }
 
+    @Cacheable(value = "product", key = "#id", unless = "#result == null")
     public Mono<ProductDto> getItemById(Long id) {
+        log.info("Loading product from DB: id={}", id);
         return productRepository.findById(id)
                 .map(productMapper::toDto)
                 .flatMap(dto ->
                         cartItemRepository.findByProductId(id)
                                 .map(ci -> dto.withCount(ci.getCount()))
                                 .defaultIfEmpty(dto.withCount(0))
-                );
+                )
+                .cache();
     }
 
+    @Cacheable(value = "cart", key = "'all'", unless = "#result == null")
     public Flux<ProductDto> getItemsInCart() {
+        log.info("Loading cart from DB");
         return cartItemRepository.findAll()
                 .flatMap(cartItem ->
                         productRepository.findById(cartItem.getProductId())
                                 .map(product -> productMapper.toDto(product).withCount(cartItem.getCount()))
-                );
+                )
+                .cache();
     }
 
     private Sort buildSort(String sort) {

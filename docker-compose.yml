@@ -7,10 +7,13 @@ services:
       - "9090:8080"
     depends_on:
       - db
+      - redis
     environment:
       - SPRING_R2DBC_URL=r2dbc:mysql://db:3306/${MYSQL_DATABASE}
       - SPRING_R2DBC_USERNAME=${DB_USERNAME}
       - SPRING_R2DBC_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
 
   db:
     image: mysql:8.0
@@ -27,5 +30,14 @@ services:
     command:
       --default-authentication-plugin=mysql_native_password
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
 volumes:
   db_data:
+  redis_data:
