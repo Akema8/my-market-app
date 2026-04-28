@@ -150,7 +150,7 @@ public class ProductService {
                 )
                 .doOnError(e -> log.error("Error in changeItemQuantity", e))
                 .then()
-                .then(invalidateAllCaches());
+                .then(updateProductAndCartCache(productId));
     }
 
     public Mono<ProductDto> getItemById(Long id) {
@@ -220,6 +220,56 @@ public class ProductService {
                 redisTemplate.keys("product:*").flatMap(redisTemplate::delete),
                 redisTemplate.keys("cart:*").flatMap(redisTemplate::delete)
         ).then();
+    }
+
+    private Mono<Void> updateProductAndCartCache(Long productId) {
+        log.info("Updating cache for product {} and cart", productId);
+        Mono<Void> updateProduct = productRepository.findById(productId)
+                .map(productMapper::toDto)
+                .flatMap(dto ->
+                        cartItemRepository.findByProductId(productId)
+                                .map(ci -> dto.withCount(ci.getCount()))
+                                .defaultIfEmpty(dto.withCount(0))
+                )
+                .flatMap(updatedDto -> {
+                    log.info("Updating product cache: product:{} with count={}", productId, updatedDto.count());
+                    return redisTemplate.opsForValue()
+                            .set("product:" + productId, updatedDto, cacheTtl)
+                            .then();
+                })
+                .onErrorResume(e -> {
+                    log.warn("Failed to update product cache for {}, deleting instead", productId, e);
+                    return redisTemplate.delete("product:" + productId).then();
+                });
+
+        Mono<Void> updateCart = cartItemRepository.findAll()
+                .flatMap(cartItem ->
+                        productRepository.findById(cartItem.getProductId())
+                                .map(product -> productMapper.toDto(product).withCount(cartItem.getCount()))
+                )
+                .collectList()
+                .flatMap(cartList -> {
+                    log.info("Updating cart cache: {} items", cartList.size());
+                    if (cartList.isEmpty()) {
+                        // Если корзина пустая, удаляем кеш
+                        return redisTemplate.keys("cart:*").flatMap(redisTemplate::delete).then();
+                    } else {
+                        return redisTemplate.opsForValue()
+                                .set("cart:all", cartList, cacheTtl)
+                                .then();
+                    }
+                })
+                .onErrorResume(e -> {
+                    log.warn("Failed to update cart cache, deleting instead", e);
+                    return redisTemplate.keys("cart:*").flatMap(redisTemplate::delete).then();
+                });
+
+        Mono<Void> invalidateProductLists = redisTemplate.keys("products:*")
+                .flatMap(redisTemplate::delete)
+                .then()
+                .doOnSuccess(v -> log.info("Invalidated products lists cache (count changed)"));
+
+        return Mono.when(updateProduct, updateCart, invalidateProductLists);
     }
 
     @SuppressWarnings("unchecked")
