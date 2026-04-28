@@ -2,15 +2,15 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.dto.CachedPage;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
 import ru.yandex.practicum.mymarket.mapper.ProductMapper;
 import ru.yandex.practicum.mymarket.model.CartItem;
@@ -18,6 +18,7 @@ import ru.yandex.practicum.mymarket.model.Product;
 import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -30,25 +31,39 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductMapper productMapper;
+    private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final Duration cacheTtl;
 
-    public ProductService(ProductRepository productRepository, ProductMapper productMapper, CartItemRepository cartItemRepository) {
+    public ProductService(ProductRepository productRepository, ProductMapper productMapper, CartItemRepository cartItemRepository, ReactiveRedisTemplate<String, Object> redisTemplate, Duration cacheTtl) {
         this.productRepository = productRepository;
         this.productMapper = productMapper;
         this.cartItemRepository = cartItemRepository;
+        this.redisTemplate = redisTemplate;
+        this.cacheTtl = cacheTtl;
     }
 
     public Flux<ProductDto> getAllProducts() {
         return productRepository.findAll().map(productMapper::toDto);
     }
 
-    @Cacheable(
-        value = "products",
-        key = "(#search ?: 'all') + ':' + #sort + ':' + #pageNumber + ':' + #pageSize",
-        unless = "#result == null"
-    )
+    @SuppressWarnings("unchecked")
     public Mono<Page<ProductDto>> findItems(String search, String sort, int pageNumber, int pageSize) {
-        log.info("Loading from DB: search={}, sort={}, page={}, size={}", search, sort, pageNumber, pageSize);
-        return loadFromDatabase(search, sort, pageNumber, pageSize);
+        String cacheKey = "products:" + (search != null ? search : "all") + ":" + sort + ":" + pageNumber + ":" + pageSize;
+
+        return redisTemplate.opsForValue()
+                .get(cacheKey)
+                .cast(CachedPage.class)
+                .map(this::toPage)
+                .doOnNext(cached -> log.info("Cache key: {}", cacheKey))
+                .switchIfEmpty(
+                    loadFromDatabase(search, sort, pageNumber, pageSize)
+                        .doOnNext(page -> log.info("Cache not found, loading from DB: search={}, sort={}, page={}, size={}", search, sort, pageNumber, pageSize))
+                        .flatMap(page ->
+                            redisTemplate.opsForValue()
+                                .set(cacheKey, toCachedPage(page), cacheTtl)
+                                .thenReturn(page)
+                        )
+                );
     }
 
     private Mono<Page<ProductDto>> loadFromDatabase(String search, String sort, int pageNumber, int pageSize) {
@@ -98,7 +113,6 @@ public class ProductService {
                 });
     }
 
-    @CacheEvict(value = {"products", "product", "cart"}, allEntries = true)
     public Mono<Void> changeItemQuantity(Long productId, String action) {
         log.info("changeItemQuantity called: productId={}, action={}", productId, action);
         return productRepository.findById(productId)
@@ -135,39 +149,97 @@ public class ProductService {
                                 })
                 )
                 .doOnError(e -> log.error("Error in changeItemQuantity", e))
-                .then();
+                .then()
+                .then(invalidateAllCaches());
     }
 
-    @Cacheable(value = "product", key = "#id", unless = "#result == null")
     public Mono<ProductDto> getItemById(Long id) {
-        log.info("Loading product from DB: id={}", id);
-        return productRepository.findById(id)
-                .map(productMapper::toDto)
-                .flatMap(dto ->
-                        cartItemRepository.findByProductId(id)
+        String cacheKey = "product:" + id;
+
+        return redisTemplate.opsForValue()
+                .get(cacheKey)
+                .cast(ProductDto.class)
+                .doOnNext(cached -> log.info("Cache key: {}", cacheKey))
+                .switchIfEmpty(
+                    productRepository.findById(id)
+                        .doOnNext(p -> log.info("Cache not found, loading product from DB: id={}", id))
+                        .map(productMapper::toDto)
+                        .flatMap(dto ->
+                            cartItemRepository.findByProductId(id)
                                 .map(ci -> dto.withCount(ci.getCount()))
                                 .defaultIfEmpty(dto.withCount(0))
+                        )
+                        .flatMap(dto ->
+                            redisTemplate.opsForValue()
+                                .set(cacheKey, dto, cacheTtl)
+                                .thenReturn(dto)
+                        )
                 );
     }
 
-    @Cacheable(value = "cart", key = "'all'", unless = "#result == null")
+    @SuppressWarnings("unchecked")
     public Flux<ProductDto> getItemsInCart() {
-        log.info("Loading cart from DB");
-        return cartItemRepository.findAll()
-                .flatMap(cartItem ->
-                        productRepository.findById(cartItem.getProductId())
-                                .map(product -> productMapper.toDto(product).withCount(cartItem.getCount()))
+        String cacheKey = "cart:all";
+
+        return redisTemplate.opsForValue()
+                .get(cacheKey)
+                .cast(List.class)
+                .doOnNext(cached -> log.info("Cache key: {}", cacheKey))
+                .flatMapMany(list -> Flux.fromIterable(list).map(item -> (ProductDto) item))
+                .switchIfEmpty(
+                    cartItemRepository.findAll()
+                        .doOnSubscribe(s -> log.info("Cache not found, loading cart from DB"))
+                        .flatMap(cartItem ->
+                            productRepository.findById(cartItem.getProductId())
+                                    .map(productMapper::toDto)
+                                    .map(dto -> dto.withCount(cartItem.getCount()))
+                        )
+                        .collectList()
+                        .flatMap(list ->
+                            redisTemplate.opsForValue()
+                                .set(cacheKey, list, cacheTtl)
+                                .thenReturn(list)
+                        )
+                        .flatMapMany(Flux::fromIterable)
                 );
     }
 
-    @CacheEvict(value = {"products", "product", "cart"}, allEntries = true)
     public Mono<ProductDto> createItem(String title, String description, String imgPath, Long price) {
         log.info("Creating new product: title={}, price={}", title, price);
-        Product product =
-                new Product(title, description, imgPath, price);
+        Product product = new Product(title, description, imgPath, price);
         return productRepository.save(product)
                 .map(productMapper::toDto)
-                .map(dto -> dto.withCount(10));
+                .map(dto -> dto.withCount(0))
+                .flatMap(dto -> invalidateAllCaches().thenReturn(dto));
+    }
+
+    private Mono<Void> invalidateAllCaches() {
+        log.info("Invalidating all caches");
+        return Flux.concat(
+                redisTemplate.keys("products:*").flatMap(redisTemplate::delete),
+                redisTemplate.keys("product:*").flatMap(redisTemplate::delete),
+                redisTemplate.keys("cart:*").flatMap(redisTemplate::delete)
+        ).then();
+    }
+
+    @SuppressWarnings("unchecked")
+    private CachedPage<ProductDto> toCachedPage(Page<ProductDto> page) {
+        return new CachedPage<>(
+                page.getContent(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.getSize(),
+                page.getNumber(),
+                page.hasPrevious(),
+                page.hasNext()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private Page<ProductDto> toPage(CachedPage cachedPage) {
+        List<ProductDto> content = (List<ProductDto>) cachedPage.getContent();
+        PageRequest pageRequest = PageRequest.of(cachedPage.getNumber(), cachedPage.getSize());
+        return new PageImpl<>(content, pageRequest, cachedPage.getTotalElements());
     }
 
     private Sort buildSort(String sort) {
