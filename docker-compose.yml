@@ -48,6 +48,19 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
 volumes:
   db_data:
   redis_data:

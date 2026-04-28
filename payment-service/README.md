@@ -2,7 +2,13 @@
 
 RESTful сервис для обработки платежей.
 
-## Статус
 
-Модуль создан, базовая структура готова. Реализация функциональности - в разработке.
+## Стек технологий
+
+- Spring Boot 3.1
+- Spring WebFlux
+- Spring Data R2DBC
+- Spring Data Redis Reactive 
+- Lettuce
+- MapStruct
 

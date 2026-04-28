@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  description: RESTful API для работы с балансом и платежами
+  version: 1.0.0
+  contact:
+    name: Margarita
+    email: rl-c@yandex.ru
+
+servers:
+  - url: http://localhost:8081
+    description: Development server
+
+tags:
+  - name: balance
+    description: Операции с балансом
+  - name: payment
+    description: Операции оплаты
+
+paths:
+  /balance:
+    get:
+      tags:
+        - balance
+      summary: Получить баланс пользователя
+      operationId: getBalance
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          description: ID пользователя
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '200':
+          description: Баланс пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+
+  /payment:
+    post:
+      tags:
+        - payment
+      summary: Провести платеж
+      operationId: processPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessPaymentRequest'
+      responses:
+        '200':
+          description: Результат платежа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResult'
+        '400':
+          description: Ошибка валидации
+
+components:
+  schemas:
+    BalanceResponse:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 1
+        balance:
+          type: integer
+          format: int64
+          description: Баланс
+          example: 100000
+
+    ProcessPaymentRequest:
+      type: object
+      required:
+        - userId
+        - amount
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 1
+        amount:
+          type: integer
+          format: int64
+          description: Сумма платежа
+          minimum: 1
+          example: 5000
+
+    PaymentResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Успешность операции
+          example: true
+        message:
+          type: string
+          description: Сообщение о результате
+          example: "Успешная оплата!"
+        remainingBalance:
+          type: integer
+          format: int64
+          description: Остаток на балансе после платежа
+          example: 95000
