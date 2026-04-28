@@ -1,7 +1,10 @@
 package ru.yandex.practicum.mymarket.controller;
 
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -9,6 +12,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartItemForm;
 import ru.yandex.practicum.mymarket.dto.ChangeQuantityForm;
+import ru.yandex.practicum.mymarket.dto.CreateProductDto;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
 import ru.yandex.practicum.mymarket.service.ProductService;
@@ -54,7 +58,7 @@ public class ProductController {
 
     @PostMapping
     public Mono<String> changeItemQuantity(@ModelAttribute ChangeQuantityForm form) {
-        log.info("POST /items - id={}, action={}, search={}, sort={}, pageNumber={}, pageSize={}",
+        log.info("POST /items changeItemQuantity - id={}, action={}, search={}, sort={}, pageNumber={}, pageSize={}",
                 form.getId(), form.getAction(), form.getSearch(), form.getSort(),
                 form.getPageNumber(), form.getPageSize());
 
@@ -98,5 +102,18 @@ public class ProductController {
                     model.addAttribute("item", product);
                     return "item";
                 });
+    }
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<ProductDto> createItem(@Valid @RequestBody CreateProductDto request) {
+        log.info("POST /items createItem: {}", request.title());
+        return productService.createItem(
+                request.title(),
+                request.description(),
+                request.imgPath(),
+                request.price()
+        );
     }
 }

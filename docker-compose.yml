@@ -6,10 +6,12 @@ services:
     ports:
       - "9090:8080"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
-      - SPRING_R2DBC_URL=r2dbc:mysql://db:3306/${MYSQL_DATABASE}
+      - SPRING_R2DBC_URL=r2dbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&connectionCollation=utf8mb4_unicode_ci
       - SPRING_R2DBC_USERNAME=${DB_USERNAME}
       - SPRING_R2DBC_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
@@ -29,6 +31,14 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     command:
       --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpsw123321"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   redis:
     image: redis:7-alpine

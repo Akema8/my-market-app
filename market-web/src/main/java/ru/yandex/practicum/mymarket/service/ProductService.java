@@ -48,8 +48,7 @@ public class ProductService {
     )
     public Mono<Page<ProductDto>> findItems(String search, String sort, int pageNumber, int pageSize) {
         log.info("Loading from DB: search={}, sort={}, page={}, size={}", search, sort, pageNumber, pageSize);
-        return loadFromDatabase(search, sort, pageNumber, pageSize)
-                .cache();
+        return loadFromDatabase(search, sort, pageNumber, pageSize);
     }
 
     private Mono<Page<ProductDto>> loadFromDatabase(String search, String sort, int pageNumber, int pageSize) {
@@ -148,8 +147,7 @@ public class ProductService {
                         cartItemRepository.findByProductId(id)
                                 .map(ci -> dto.withCount(ci.getCount()))
                                 .defaultIfEmpty(dto.withCount(0))
-                )
-                .cache();
+                );
     }
 
     @Cacheable(value = "cart", key = "'all'", unless = "#result == null")
@@ -159,8 +157,17 @@ public class ProductService {
                 .flatMap(cartItem ->
                         productRepository.findById(cartItem.getProductId())
                                 .map(product -> productMapper.toDto(product).withCount(cartItem.getCount()))
-                )
-                .cache();
+                );
+    }
+
+    @CacheEvict(value = {"products", "product", "cart"}, allEntries = true)
+    public Mono<ProductDto> createItem(String title, String description, String imgPath, Long price) {
+        log.info("Creating new product: title={}, price={}", title, price);
+        Product product =
+                new Product(title, description, imgPath, price);
+        return productRepository.save(product)
+                .map(productMapper::toDto)
+                .map(dto -> dto.withCount(10));
     }
 
     private Sort buildSort(String sort) {

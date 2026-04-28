@@ -18,7 +18,7 @@ tags:
     description: Операции с заказами
 
 paths:
-  /api/v1/products:
+  /items:
     get:
       tags:
         - products
@@ -63,7 +63,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductPage'
 
-  /api/v1/products/{id}:
+    post:
+      tags:
+        - products
+      summary: Создать новый товар
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Товар создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Ошибка валидации
+
+  /items/{id}:
     get:
       tags:
         - products
@@ -87,7 +108,7 @@ paths:
         '404':
           description: Товар не найден
 
-  /api/v1/cart/items:
+  /cart/items:
     get:
       tags:
         - products
@@ -120,7 +141,7 @@ paths:
         '404':
           description: Товар не найден
 
-  /api/v1/orders:
+  /orders:
     get:
       tags:
         - orders
@@ -151,7 +172,7 @@ paths:
         '400':
           description: Корзина пуста
 
-  /api/v1/orders/{id}:
+  /orders/{id}:
     get:
       tags:
         - orders
@@ -341,3 +362,29 @@ components:
           format: int64
           description: ID созданного заказа
           example: 1
+
+    CreateProductRequest:
+      type: object
+      required:
+        - title
+        - price
+      properties:
+        title:
+          type: string
+          description: Название товара
+          minLength: 1
+          example: Футбольный мяч
+        description:
+          type: string
+          description: Описание товара
+          example: Профессиональный мяч размер 5
+        imgPath:
+          type: string
+          description: Путь к изображению
+          example: /images/ball.jpg
+        price:
+          type: integer
+          format: int64
+          description: Цена товара
+          minimum: 1
+          example: 2500
