@@ -1,32 +1,19 @@
 package ru.yandex.practicum.mymarket.test.integration.controller;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import reactor.core.publisher.Mono;
-import ru.yandex.practicum.mymarket.controller.ProductController;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
-import ru.yandex.practicum.mymarket.service.ProductService;
 
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
-@WebFluxTest(ProductController.class)
-public class ProductControllerTest {
-
-    @Autowired
-    private WebTestClient webTestClient;
-
-    @MockBean
-    private ProductService productService;
+public class ProductControllerTest extends BaseControllerTest {
 
     @Test
     public void testGetProducts() {

@@ -1,10 +1,9 @@
 package ru.yandex.practicum.mymarket;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import ru.yandex.practicum.mymarket.test.integration.BaseIntegrationTest;
 
-@SpringBootTest
-class MyMarketAppApplicationTests {
+class MyMarketAppApplicationTests extends BaseIntegrationTest {
 
 	@Test
 	void contextLoads() {

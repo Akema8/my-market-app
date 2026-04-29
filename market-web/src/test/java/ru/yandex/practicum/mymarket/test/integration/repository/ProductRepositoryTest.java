@@ -2,21 +2,14 @@ package ru.yandex.practicum.mymarket.test.integration.repository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.model.Product;
-import ru.yandex.practicum.mymarket.repository.ProductRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataR2dbcTest
-public class ProductRepositoryTest {
-
-    @Autowired
-    private ProductRepository productRepository;
+public class ProductRepositoryTest extends BaseRepositoryTest {
 
     @BeforeEach
     public void setUp() {

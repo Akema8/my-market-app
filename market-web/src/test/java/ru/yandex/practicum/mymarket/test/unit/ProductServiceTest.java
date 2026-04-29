@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
 import org.springframework.data.domain.Page;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -15,6 +17,7 @@ import ru.yandex.practicum.mymarket.repository.CartItemRepository;
 import ru.yandex.practicum.mymarket.repository.ProductRepository;
 import ru.yandex.practicum.mymarket.service.ProductService;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -22,7 +25,6 @@ import static org.mockito.Mockito.*;
 
 public class ProductServiceTest {
 
-    @InjectMocks
     private ProductService productService;
 
     @Mock
@@ -34,9 +36,31 @@ public class ProductServiceTest {
     @Mock
     private ProductMapper productMapper;
 
+    @Mock
+    private ReactiveRedisTemplate<String, Object> redisTemplate;
+
+    @Mock
+    private ReactiveValueOperations<String, Object> valueOps;
+
     @BeforeEach
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(redisTemplate.keys(anyString())).thenReturn(Flux.empty());
+        when(redisTemplate.delete(anyString())).thenReturn(Mono.just(1L));
+        when(valueOps.get(anyString())).thenReturn(Mono.empty());
+        when(valueOps.set(anyString(), any(), any(Duration.class))).thenReturn(Mono.just(true));
+
+        when(cartItemRepository.findAll()).thenReturn(Flux.empty());
+        when(productRepository.findById(anyLong())).thenReturn(Mono.empty());
+
+        productService = new ProductService(
+            productRepository,
+            productMapper,
+            cartItemRepository,
+            redisTemplate,
+            Duration.ofMinutes(5)
+        );
     }
 
     @Test
