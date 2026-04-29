@@ -213,6 +213,18 @@ public class ProductService {
                 .flatMap(dto -> invalidateAllCaches().thenReturn(dto));
     }
 
+    public Mono<Void> clearCart() {
+        log.info("Clearing cart");
+        return cartItemRepository.deleteAll()
+                .then(redisTemplate.keys("cart:*")
+                        .flatMap(redisTemplate::delete)
+                        .then())
+                .then(redisTemplate.keys("products:*")
+                        .flatMap(redisTemplate::delete)
+                        .then())
+                .doOnSuccess(v -> log.info("Cart cleared successfully"));
+    }
+
     private Mono<Void> invalidateAllCaches() {
         log.info("Invalidating all caches");
         return Flux.concat(

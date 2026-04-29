@@ -10,12 +10,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      payment-service:
+        condition: service_started
     environment:
       - SPRING_R2DBC_URL=r2dbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&connectionCollation=utf8mb4_unicode_ci
       - SPRING_R2DBC_USERNAME=${DB_USERNAME}
       - SPRING_R2DBC_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - PAYMENT_SERVICE_URL=http://payment-service:8081
 
   db:
     image: mysql:8.0

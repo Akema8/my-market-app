@@ -46,12 +46,35 @@
         </div>
         <div class="row p-2">
             <div class="col">
-                <form action="/buy" method="post" th:if="${!items.isEmpty()}">
-                    <div class="hstack gap-3">
-                        <h2 th:text="'Итого: '+${total}+' руб.'"/>
-                        <button class="btn btn-warning ms-auto">Купить</button>
-                    </div>
+                <div th:if="${error}" class="alert alert-danger" role="alert">
+                    <span th:text="${error}"></span>
+                </div>
+                <div th:if="${success}" class="alert alert-success" role="alert">
+                    <span th:text="${success}"></span>
+                </div>
+            </div>
+        </div>
+        <div class="row p-2" th:if="${!items.isEmpty()}">
+            <div class="col">
+                <div class="hstack gap-3">
+                    <h2 th:text="'Итого: '+${total}+' руб.'"/>
+                    <span class="badge bg-info text-dark ms-auto" th:text="'Баланс: '+${balance}+' руб.'"></span>
+                </div>
+            </div>
+        </div>
+        <div class="row p-2" th:if="${!items.isEmpty()}">
+            <div class="col">
+                <form action="/buy" method="post" th:if="${hasSufficientFunds}">
+                    <button class="btn btn-warning w-100">Купить</button>
                 </form>
+                <div th:unless="${hasSufficientFunds}">
+                    <div th:if="${serviceAvailable}" class="alert alert-warning" role="alert">
+                        Недостаточно средств на балансе. Требуется: <strong th:text="${total}"></strong> руб., доступно: <strong th:text="${balance}"></strong> руб.
+                    </div>
+                    <div th:unless="${serviceAvailable}" class="alert alert-danger" role="alert">
+                        Сервис платежей недоступен. Попробуйте позже.
+                    </div>
+                </div>
             </div>
         </div>
     </div>

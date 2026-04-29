@@ -1,19 +1,30 @@
 package ru.yandex.practicum.mymarket.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.service.OrderService;
+import ru.yandex.practicum.mymarket.service.PaymentClient;
+import ru.yandex.practicum.mymarket.service.ProductService;
 
 @Controller
 @RequestMapping("/orders")
 public class OrderController {
 
-    private final OrderService orderService;
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
+    private static final Long USER_ID = 1L;
 
-    public OrderController(OrderService orderService) {
+    private final OrderService orderService;
+    private final PaymentClient paymentClient;
+    private final ProductService productService;
+
+    public OrderController(OrderService orderService, PaymentClient paymentClient, ProductService productService) {
         this.orderService = orderService;
+        this.paymentClient = paymentClient;
+        this.productService = productService;
     }
 
     @GetMapping
