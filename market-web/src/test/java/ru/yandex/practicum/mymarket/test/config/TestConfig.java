@@ -1,6 +1,8 @@
 package ru.yandex.practicum.mymarket.test.config;
 
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.support.NoOpCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
@@ -35,20 +37,26 @@ public class TestConfig {
     public ReactiveRedisTemplate<String, Object> reactiveRedisTemplate(ReactiveRedisConnectionFactory connectionFactory) {
         StringRedisSerializer keySerializer = new StringRedisSerializer();
         GenericJackson2JsonRedisSerializer valueSerializer = new GenericJackson2JsonRedisSerializer();
-
         RedisSerializationContext<String, Object> serializationContext = RedisSerializationContext
                 .<String, Object>newSerializationContext()
-                .key(keySerializer)
-                .value(valueSerializer)
-                .hashKey(keySerializer)
-                .hashValue(valueSerializer)
+                .key(keySerializer).value(valueSerializer)
+                .hashKey(keySerializer).hashValue(valueSerializer)
                 .build();
-
         return new ReactiveRedisTemplate<>(connectionFactory, serializationContext);
     }
 
-    @Bean
-    public Duration cacheTtl() {
+    @Bean("productsCacheTtl")
+    public Duration productsCacheTtl() {
         return Duration.ofMinutes(5);
+    }
+
+    @Bean("balanceCacheTtl")
+    public Duration balanceCacheTtl() {
+        return Duration.ofSeconds(30);
+    }
+
+    @Bean
+    public CacheManager cacheManager() {
+        return new NoOpCacheManager();
     }
 }

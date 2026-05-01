@@ -2,6 +2,7 @@ package ru.yandex.practicum.mymarket.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -10,6 +11,7 @@ import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.mymarket.cache.CacheKeys;
 import ru.yandex.practicum.mymarket.dto.CachedPage;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
 import ru.yandex.practicum.mymarket.mapper.ProductMapper;
@@ -34,7 +36,11 @@ public class ProductService {
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final Duration cacheTtl;
 
-    public ProductService(ProductRepository productRepository, ProductMapper productMapper, CartItemRepository cartItemRepository, ReactiveRedisTemplate<String, Object> redisTemplate, Duration cacheTtl) {
+    public ProductService(ProductRepository productRepository,
+                          ProductMapper productMapper,
+                          CartItemRepository cartItemRepository,
+                          ReactiveRedisTemplate<String, Object> redisTemplate,
+                          @Qualifier("productsCacheTtl") Duration cacheTtl) {
         this.productRepository = productRepository;
         this.productMapper = productMapper;
         this.cartItemRepository = cartItemRepository;
@@ -48,7 +54,7 @@ public class ProductService {
 
     @SuppressWarnings("unchecked")
     public Mono<Page<ProductDto>> findItems(String search, String sort, int pageNumber, int pageSize) {
-        String cacheKey = "products:" + (search != null ? search : "all") + ":" + sort + ":" + pageNumber + ":" + pageSize;
+        String cacheKey = CacheKeys.products(search, sort, pageNumber, pageSize);
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -57,7 +63,7 @@ public class ProductService {
                 .doOnNext(cached -> log.info("Cache key: {}", cacheKey))
                 .switchIfEmpty(
                     loadFromDatabase(search, sort, pageNumber, pageSize)
-                        .doOnNext(page -> log.info("Cache not found, loading from DB: search={}, sort={}, page={}, size={}", search, sort, pageNumber, pageSize))
+                        .doOnNext(page -> log.info("Cache not found, loading from DB: {}", cacheKey))
                         .flatMap(page ->
                             redisTemplate.opsForValue()
                                 .set(cacheKey, toCachedPage(page), cacheTtl)
@@ -140,11 +146,9 @@ public class ProductService {
                                             log.info("MINUS action: deleting cartItem");
                                             return cartItemRepository.delete(cartItem);
                                         }
-                                    }
-                                    else if ("DELETE".equals(action)) {
+                                    } else if ("DELETE".equals(action)) {
                                         return cartItemRepository.delete(cartItem);
                                     }
-
                                     return Mono.empty();
                                 })
                 )
@@ -154,7 +158,7 @@ public class ProductService {
     }
 
     public Mono<ProductDto> getItemById(Long id) {
-        String cacheKey = "product:" + id;
+        String cacheKey = CacheKeys.product(id);
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -179,7 +183,7 @@ public class ProductService {
 
     @SuppressWarnings("unchecked")
     public Flux<ProductDto> getItemsInCart() {
-        String cacheKey = "cart:all";
+        String cacheKey = CacheKeys.CART_KEY;
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -216,10 +220,10 @@ public class ProductService {
     public Mono<Void> clearCart() {
         log.info("Clearing cart");
         return cartItemRepository.deleteAll()
-                .then(redisTemplate.keys("cart:*")
+                .then(redisTemplate.keys(CacheKeys.CART_PATTERN)
                         .flatMap(redisTemplate::delete)
                         .then())
-                .then(redisTemplate.keys("products:*")
+                .then(redisTemplate.keys(CacheKeys.PRODUCTS_PATTERN)
                         .flatMap(redisTemplate::delete)
                         .then())
                 .doOnSuccess(v -> log.info("Cart cleared successfully"));
@@ -228,9 +232,9 @@ public class ProductService {
     private Mono<Void> invalidateAllCaches() {
         log.info("Invalidating all caches");
         return Flux.concat(
-                redisTemplate.keys("products:*").flatMap(redisTemplate::delete),
-                redisTemplate.keys("product:*").flatMap(redisTemplate::delete),
-                redisTemplate.keys("cart:*").flatMap(redisTemplate::delete)
+                redisTemplate.keys(CacheKeys.PRODUCTS_PATTERN).flatMap(redisTemplate::delete),
+                redisTemplate.keys(CacheKeys.PRODUCT_PATTERN).flatMap(redisTemplate::delete),
+                redisTemplate.keys(CacheKeys.CART_PATTERN).flatMap(redisTemplate::delete)
         ).then();
     }
 
@@ -244,14 +248,14 @@ public class ProductService {
                                 .defaultIfEmpty(dto.withCount(0))
                 )
                 .flatMap(updatedDto -> {
-                    log.info("Updating product cache: product:{} with count={}", productId, updatedDto.count());
+                    log.info("Updating product cache: {} count={}", productId, updatedDto.count());
                     return redisTemplate.opsForValue()
-                            .set("product:" + productId, updatedDto, cacheTtl)
+                            .set(CacheKeys.product(productId), updatedDto, cacheTtl)
                             .then();
                 })
                 .onErrorResume(e -> {
                     log.warn("Failed to update product cache for {}, deleting instead", productId, e);
-                    return redisTemplate.delete("product:" + productId).then();
+                    return redisTemplate.delete(CacheKeys.product(productId)).then();
                 });
 
         Mono<Void> updateCart = cartItemRepository.findAll()
@@ -263,23 +267,22 @@ public class ProductService {
                 .flatMap(cartList -> {
                     log.info("Updating cart cache: {} items", cartList.size());
                     if (cartList.isEmpty()) {
-                        // Если корзина пустая, удаляем кеш
-                        return redisTemplate.keys("cart:*").flatMap(redisTemplate::delete).then();
+                        return redisTemplate.keys(CacheKeys.CART_PATTERN).flatMap(redisTemplate::delete).then();
                     } else {
                         return redisTemplate.opsForValue()
-                                .set("cart:all", cartList, cacheTtl)
+                                .set(CacheKeys.CART_KEY, cartList, cacheTtl)
                                 .then();
                     }
                 })
                 .onErrorResume(e -> {
                     log.warn("Failed to update cart cache, deleting instead", e);
-                    return redisTemplate.keys("cart:*").flatMap(redisTemplate::delete).then();
+                    return redisTemplate.keys(CacheKeys.CART_PATTERN).flatMap(redisTemplate::delete).then();
                 });
 
-        Mono<Void> invalidateProductLists = redisTemplate.keys("products:*")
+        Mono<Void> invalidateProductLists = redisTemplate.keys(CacheKeys.PRODUCTS_PATTERN)
                 .flatMap(redisTemplate::delete)
                 .then()
-                .doOnSuccess(v -> log.info("Invalidated products lists cache (count changed)"));
+                .doOnSuccess(v -> log.info("Invalidated product list caches"));
 
         return Mono.when(updateProduct, updateCart, invalidateProductLists);
     }

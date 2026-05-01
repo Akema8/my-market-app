@@ -14,11 +14,16 @@ public class CheckoutService {
     private final ProductService productService;
     private final PaymentClient paymentClient;
     private final OrderService orderService;
+    private final CartService cartService;
 
-    public CheckoutService(ProductService productService, PaymentClient paymentClient, OrderService orderService) {
+    public CheckoutService(ProductService productService,
+                           PaymentClient paymentClient,
+                           OrderService orderService,
+                           CartService cartService) {
         this.productService = productService;
         this.paymentClient = paymentClient;
         this.orderService = orderService;
+        this.cartService = cartService;
     }
 
     public Mono<CheckoutResult> checkout(Long userId) {
@@ -45,8 +50,10 @@ public class CheckoutService {
                                 log.info("Payment successful, creating order");
                                 return orderService.createOrder()
                                         .flatMap(orderId -> {
-                                            log.info("Order created: {}, clearing cart", orderId);
-                                            return productService.clearCart().thenReturn(orderId);
+                                            log.info("Order created: {}, clearing cart and balance cache", orderId);
+                                            return productService.clearCart()
+                                                    .then(cartService.evictBalanceCache(userId))
+                                                    .thenReturn(orderId);
                                         })
                                         .map(orderId -> {
                                             log.info("Checkout complete, order: {}", orderId);
