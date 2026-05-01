@@ -4,8 +4,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import ru.yandex.practicum.mymarket.service.CartService;
+import ru.yandex.practicum.mymarket.service.CheckoutService;
 import ru.yandex.practicum.mymarket.service.OrderService;
-import ru.yandex.practicum.mymarket.service.PaymentClient;
 import ru.yandex.practicum.mymarket.service.ProductService;
 
 @WebFluxTest
@@ -18,7 +19,10 @@ public abstract class BaseControllerTest {
     protected OrderService orderService;
 
     @MockBean
-    protected PaymentClient paymentClient;
+    protected CartService cartService;
+
+    @MockBean
+    protected CheckoutService checkoutService;
 
     @MockBean
     protected ProductService productService;
