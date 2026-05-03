@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import ru.yandex.practicum.mymarket.config.RedisConfig;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -24,7 +25,10 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        classes = {RedisConfig.class, CartService.class}
+)
 @Testcontainers(disabledWithoutDocker = true)
 class BalanceCacheIntegrationTest {
 
