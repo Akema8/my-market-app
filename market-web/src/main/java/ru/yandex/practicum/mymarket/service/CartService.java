@@ -70,7 +70,7 @@ public class CartService {
                     log.warn("Balance cache read failed for user {}, fetching from service", userId);
                     return Mono.empty();
                 })
-                .switchIfEmpty(
+                .switchIfEmpty(Mono.defer(() ->
                         paymentClient.getBalance(userId)
                                 .flatMap(balance -> redisTemplate.opsForValue()
                                         .set(key, balance, balanceCacheTtl)
@@ -78,6 +78,6 @@ public class CartService {
                                         .onErrorReturn(balance))
                                 .doOnNext(b -> log.info("Balance fetched and cached for user {}: {}", userId, b.balance()))
                                 .switchIfEmpty(Mono.just(new BalanceResponse(userId, 0L)))
-                );
+                ));
     }
 }
