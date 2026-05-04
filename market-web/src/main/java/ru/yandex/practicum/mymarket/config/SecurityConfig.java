@@ -16,6 +16,8 @@ import org.springframework.security.oauth2.client.registration.ReactiveClientReg
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
 import org.springframework.security.web.server.authentication.logout.RedirectServerLogoutSuccessHandler;
+import org.springframework.security.web.server.authentication.logout.WebSessionServerLogoutHandler;
+import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
 
 import java.net.URI;
 
@@ -39,9 +41,11 @@ public class SecurityConfig {
                                 new RedirectServerAuthenticationSuccessHandler("/items")))
                 .logout(logout -> logout
                         .logoutUrl("/logout")
+                        .logoutHandler(new WebSessionServerLogoutHandler())
                         .logoutSuccessHandler(logoutSuccessHandler))
                 .oauth2Client(Customizer.withDefaults())
-                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse()))
                 .build();
     }
 
