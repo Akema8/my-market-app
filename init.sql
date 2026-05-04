@@ -25,13 +25,21 @@ CREATE TABLE products (
 
 CREATE TABLE orders (
     id        BIGINT AUTO_INCREMENT PRIMARY KEY,
-    total_sum BIGINT
+    total_sum BIGINT,
+    user_id   BIGINT
 );
+
+CREATE TABLE carts (
+    id        BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id   BIGINT
+);
+
 
 CREATE TABLE cart_items (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     count      INT NOT NULL,
-    product_id BIGINT
+    product_id BIGINT,
+    cart_id    BIGINT
 );
 
 CREATE TABLE order_items (
