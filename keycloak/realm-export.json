@@ -5,6 +5,18 @@
   "registrationAllowed": false,
   "clients": [
     {
+      "clientId": "payment-service",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "description": "Resource server — validates Bearer tokens issued by Keycloak"
+    },
+    {
       "clientId": "market-web-client",
       "enabled": true,
       "protocol": "openid-connect",
@@ -16,9 +28,23 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "authorizationServicesEnabled": false,
+      "description": "OAuth2 client — requests tokens via Client Credentials to call payment-service",
       "attributes": {
         "access.token.lifespan": "300"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "payment-service-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "payment-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     }
   ]
 }
