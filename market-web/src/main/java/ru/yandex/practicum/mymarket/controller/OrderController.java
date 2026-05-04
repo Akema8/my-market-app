@@ -34,9 +34,11 @@ public class OrderController {
     public Mono<String> getOrderPage(
             @PathVariable long id,
             @RequestParam(value = "newOrder", required = false, defaultValue = "false") boolean newOrder,
+            Authentication authentication,
             Model model
     ) {
-        return orderService.getOrderById(id)
+        return userRepository.findByUsername(authentication.getName())
+                .flatMap(user -> orderService.getOrderByIdForUser(id, user.getId()))
                 .map(order -> {
                     model.addAttribute("order", order);
                     model.addAttribute("newOrder", newOrder);

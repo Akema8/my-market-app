@@ -1,7 +1,9 @@
 package ru.yandex.practicum.mymarket.service;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
@@ -40,6 +42,17 @@ public class OrderService {
 
     public Mono<OrderDto> getOrderById(Long id) {
         return orderRepository.findById(id).flatMap(this::assembleOrderDto);
+    }
+
+    public Mono<OrderDto> getOrderByIdForUser(Long id, Long userId) {
+        return orderRepository.findById(id)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND)))
+                .flatMap(order -> {
+                    if (!userId.equals(order.getUserId())) {
+                        return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN));
+                    }
+                    return assembleOrderDto(order);
+                });
     }
 
     @Transactional
