@@ -53,8 +53,8 @@ public class ProductService {
     }
 
     @SuppressWarnings("unchecked")
-    public Mono<Page<ProductDto>> findItems(String search, String sort, int pageNumber, int pageSize) {
-        String cacheKey = CacheKeys.products(search, sort, pageNumber, pageSize);
+    public Mono<Page<ProductDto>> findItems(String search, String sort, int pageNumber, int pageSize, Long cartId) {
+        String cacheKey = CacheKeys.products(search, sort, pageNumber, pageSize, cartId);
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -62,7 +62,7 @@ public class ProductService {
                 .map(this::toPage)
                 .doOnNext(cached -> log.info("Cache key: {}", cacheKey))
                 .switchIfEmpty(
-                    loadFromDatabase(search, sort, pageNumber, pageSize)
+                    loadFromDatabase(search, sort, pageNumber, pageSize, cartId)
                         .doOnNext(page -> log.info("Cache not found, loading from DB: {}", cacheKey))
                         .flatMap(page ->
                             redisTemplate.opsForValue()
@@ -72,11 +72,11 @@ public class ProductService {
                 );
     }
 
-    private Mono<Page<ProductDto>> loadFromDatabase(String search, String sort, int pageNumber, int pageSize) {
+    private Mono<Page<ProductDto>> loadFromDatabase(String search, String sort, int pageNumber, int pageSize, Long cartId) {
         Sort sorting = buildSort(sort);
         PageRequest pageable = PageRequest.of(pageNumber - 1, pageSize, sorting);
 
-        Flux<ru.yandex.practicum.mymarket.model.Product> productFlux;
+        Flux<Product> productFlux;
         Mono<Long> countMono;
 
         if (search == null || search.isBlank()) {
@@ -93,17 +93,22 @@ public class ProductService {
                 .collectList()
                 .zipWith(countMono)
                 .flatMap(tuple -> {
-                    List<ru.yandex.practicum.mymarket.model.Product> products = tuple.getT1();
+                    List<Product> products = tuple.getT1();
                     long total = tuple.getT2();
-                    List<Long> ids = products.stream()
-                            .map(Product::getId)
-                            .toList();
+                    List<Long> ids = products.stream().map(Product::getId).toList();
 
                     if (ids.isEmpty()) {
                         return Mono.just((Page<ProductDto>) new PageImpl<ProductDto>(List.of(), pageable, 0));
                     }
 
-                    return cartItemRepository.findByProductIdIn(ids)
+                    if (cartId == null) {
+                        List<ProductDto> dtos = products.stream()
+                                .map(p -> productMapper.toDto(p).withCount(0))
+                                .toList();
+                        return Mono.just((Page<ProductDto>) new PageImpl<>(dtos, pageable, total));
+                    }
+
+                    return cartItemRepository.findByProductIdInAndCartId(ids, cartId)
                             .collectList()
                             .map(cartItems -> {
                                 Map<Long, Integer> counts = cartItems.stream()
@@ -119,45 +124,40 @@ public class ProductService {
                 });
     }
 
-    public Mono<Void> changeItemQuantity(Long productId, String action) {
-        log.info("changeItemQuantity called: productId={}, action={}", productId, action);
+    public Mono<Void> changeItemQuantity(Long productId, String action, Long cartId) {
+        log.info("changeItemQuantity called: productId={}, action={}, cartId={}", productId, action, cartId);
         return productRepository.findById(productId)
                 .doOnNext(p -> log.info("Found product: {}", p.getId()))
                 .flatMap(product ->
-                        cartItemRepository.findByProductId(productId)
+                        cartItemRepository.findByProductIdAndCartId(productId, cartId)
                                 .doOnNext(ci -> log.info("Found cartItem: id={}, count={}", ci.getId(), ci.getCount()))
-                                .defaultIfEmpty(new CartItem(productId, 0))
-                                .doOnNext(ci -> log.info("After defaultIfEmpty: id={}, productId={}, count={}", ci.getId(), ci.getProductId(), ci.getCount()))
+                                .defaultIfEmpty(new CartItem(cartId, productId, 0))
                                 .flatMap(cartItem -> {
                                     int current = cartItem.getCount();
                                     if ("PLUS".equals(action)) {
                                         cartItem.setCount(current + 1);
-                                        log.info("PLUS action: saving cartItem with count={}", cartItem.getCount());
-                                        return cartItemRepository.save(cartItem)
-                                                .doOnSuccess(saved -> log.info("Saved cartItem: id={}", saved.getId()))
-                                                .doOnError(e -> log.error("Error saving cartItem", e))
-                                                .then();
+                                        return cartItemRepository.save(cartItem).then();
                                     } else if ("MINUS".equals(action)) {
                                         if (current > 1) {
                                             cartItem.setCount(current - 1);
-                                            log.info("MINUS action: saving cartItem with count={}", cartItem.getCount());
                                             return cartItemRepository.save(cartItem).then();
                                         } else if (cartItem.getId() != null) {
-                                            log.info("MINUS action: deleting cartItem");
                                             return cartItemRepository.delete(cartItem);
                                         }
                                     } else if ("DELETE".equals(action)) {
-                                        return cartItemRepository.delete(cartItem);
+                                        if (cartItem.getId() != null) {
+                                            return cartItemRepository.delete(cartItem);
+                                        }
                                     }
                                     return Mono.empty();
                                 })
                 )
                 .doOnError(e -> log.error("Error in changeItemQuantity", e))
                 .then()
-                .then(updateProductAndCartCache(productId));
+                .then(updateProductAndCartCache(productId, cartId));
     }
 
-    public Mono<ProductDto> getItemById(Long id) {
+    public Mono<ProductDto> getItemById(Long id, Long cartId) {
         String cacheKey = CacheKeys.product(id);
 
         return redisTemplate.opsForValue()
@@ -168,11 +168,14 @@ public class ProductService {
                     productRepository.findById(id)
                         .doOnNext(p -> log.info("Cache not found, loading product from DB: id={}", id))
                         .map(productMapper::toDto)
-                        .flatMap(dto ->
-                            cartItemRepository.findByProductId(id)
-                                .map(ci -> dto.withCount(ci.getCount()))
-                                .defaultIfEmpty(dto.withCount(0))
-                        )
+                        .flatMap(dto -> {
+                            if (cartId == null) {
+                                return Mono.just(dto.withCount(0));
+                            }
+                            return cartItemRepository.findByProductIdAndCartId(id, cartId)
+                                    .map(ci -> dto.withCount(ci.getCount()))
+                                    .defaultIfEmpty(dto.withCount(0));
+                        })
                         .flatMap(dto ->
                             redisTemplate.opsForValue()
                                 .set(cacheKey, dto, cacheTtl)
@@ -182,8 +185,8 @@ public class ProductService {
     }
 
     @SuppressWarnings("unchecked")
-    public Flux<ProductDto> getItemsInCart() {
-        String cacheKey = CacheKeys.CART_KEY;
+    public Flux<ProductDto> getItemsInCart(Long cartId) {
+        String cacheKey = CacheKeys.cart(cartId);
 
         return redisTemplate.opsForValue()
                 .get(cacheKey)
@@ -191,7 +194,7 @@ public class ProductService {
                 .doOnNext(cached -> log.info("Cache key: {}", cacheKey))
                 .flatMapMany(list -> Flux.fromIterable(list).map(item -> (ProductDto) item))
                 .switchIfEmpty(
-                    cartItemRepository.findAll()
+                    cartItemRepository.findByCartId(cartId)
                         .doOnSubscribe(s -> log.info("Cache not found, loading cart from DB"))
                         .flatMap(cartItem ->
                             productRepository.findById(cartItem.getProductId())
@@ -217,16 +220,14 @@ public class ProductService {
                 .flatMap(dto -> invalidateAllCaches().thenReturn(dto));
     }
 
-    public Mono<Void> clearCart() {
-        log.info("Clearing cart");
-        return cartItemRepository.deleteAll()
-                .then(redisTemplate.keys(CacheKeys.CART_PATTERN)
-                        .flatMap(redisTemplate::delete)
-                        .then())
+    public Mono<Void> clearCart(Long cartId) {
+        log.info("Clearing cart: {}", cartId);
+        return cartItemRepository.deleteByCartId(cartId)
+                .then(redisTemplate.delete(CacheKeys.cart(cartId)).then())
                 .then(redisTemplate.keys(CacheKeys.PRODUCTS_PATTERN)
                         .flatMap(redisTemplate::delete)
                         .then())
-                .doOnSuccess(v -> log.info("Cart cleared successfully"));
+                .doOnSuccess(v -> log.info("Cart {} cleared successfully", cartId));
     }
 
     private Mono<Void> invalidateAllCaches() {
@@ -238,12 +239,12 @@ public class ProductService {
         ).then();
     }
 
-    private Mono<Void> updateProductAndCartCache(Long productId) {
-        log.info("Updating cache for product {} and cart", productId);
+    private Mono<Void> updateProductAndCartCache(Long productId, Long cartId) {
+        log.info("Updating cache for product {} in cart {}", productId, cartId);
         Mono<Void> updateProduct = productRepository.findById(productId)
                 .map(productMapper::toDto)
                 .flatMap(dto ->
-                        cartItemRepository.findByProductId(productId)
+                        cartItemRepository.findByProductIdAndCartId(productId, cartId)
                                 .map(ci -> dto.withCount(ci.getCount()))
                                 .defaultIfEmpty(dto.withCount(0))
                 )
@@ -258,7 +259,7 @@ public class ProductService {
                     return redisTemplate.delete(CacheKeys.product(productId)).then();
                 });
 
-        Mono<Void> updateCart = cartItemRepository.findAll()
+        Mono<Void> updateCart = cartItemRepository.findByCartId(cartId)
                 .flatMap(cartItem ->
                         productRepository.findById(cartItem.getProductId())
                                 .map(product -> productMapper.toDto(product).withCount(cartItem.getCount()))
@@ -267,16 +268,16 @@ public class ProductService {
                 .flatMap(cartList -> {
                     log.info("Updating cart cache: {} items", cartList.size());
                     if (cartList.isEmpty()) {
-                        return redisTemplate.keys(CacheKeys.CART_PATTERN).flatMap(redisTemplate::delete).then();
+                        return redisTemplate.delete(CacheKeys.cart(cartId)).then();
                     } else {
                         return redisTemplate.opsForValue()
-                                .set(CacheKeys.CART_KEY, cartList, cacheTtl)
+                                .set(CacheKeys.cart(cartId), cartList, cacheTtl)
                                 .then();
                     }
                 })
                 .onErrorResume(e -> {
                     log.warn("Failed to update cart cache, deleting instead", e);
-                    return redisTemplate.keys(CacheKeys.CART_PATTERN).flatMap(redisTemplate::delete).then();
+                    return redisTemplate.delete(CacheKeys.cart(cartId)).then();
                 });
 
         Mono<Void> invalidateProductLists = redisTemplate.keys(CacheKeys.PRODUCTS_PATTERN)
