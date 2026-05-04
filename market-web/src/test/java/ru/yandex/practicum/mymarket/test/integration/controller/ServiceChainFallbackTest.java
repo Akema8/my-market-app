@@ -8,6 +8,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import ru.yandex.practicum.mymarket.config.SecurityConfig;
 import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -37,7 +38,7 @@ import static org.mockito.Mockito.when;
  * Здесь CartService и CheckoutService настоящие, поэтому проверяется onErrorResume и fallback-поведение реактивных потоков.
  */
 @WebFluxTest(controllers = {CartController.class, CheckoutController.class})
-@Import({CartService.class, CheckoutService.class, ServiceChainFallbackTest.TestConfig.class})
+@Import({CartService.class, CheckoutService.class, ServiceChainFallbackTest.TestConfig.class, SecurityConfig.class})
 class ServiceChainFallbackTest {
 
     @TestConfiguration

@@ -4,19 +4,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.payment.config.SecurityConfig;
 import ru.yandex.practicum.payment.dto.BalanceResponse;
 import ru.yandex.practicum.payment.dto.PaymentResult;
 import ru.yandex.practicum.payment.dto.ProcessPaymentRequest;
 import ru.yandex.practicum.payment.service.PaymentService;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(PaymentController.class)
+@Import(SecurityConfig.class)
 public class PaymentControllerTest {
 
     @Autowired
@@ -34,7 +37,8 @@ public class PaymentControllerTest {
 
         when(paymentService.getBalance(userId)).thenReturn(Mono.just(response));
 
-        webTestClient.get()
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/balance")
                         .queryParam("userId", userId)
@@ -55,7 +59,9 @@ public class PaymentControllerTest {
         response.setBalance(100000L);
 
         when(paymentService.getBalance(userId)).thenReturn(Mono.just(response));
-        webTestClient.get()
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .get()
                 .uri("/balance?userId={userId}", userId)
                 .exchange()
                 .expectStatus().isOk()
@@ -77,7 +83,9 @@ public class PaymentControllerTest {
 
         when(paymentService.processPayment(any(ProcessPaymentRequest.class)))
                 .thenReturn(Mono.just(result));
-        webTestClient.post()
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .post()
                 .uri("/payment")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
@@ -103,7 +111,8 @@ public class PaymentControllerTest {
         when(paymentService.processPayment(any(ProcessPaymentRequest.class)))
                 .thenReturn(Mono.just(result));
 
-        webTestClient.post()
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .post()
                 .uri("/payment")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
@@ -122,7 +131,8 @@ public class PaymentControllerTest {
                 }
                 """;
 
-        webTestClient.post()
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .post()
                 .uri("/payment")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
@@ -138,7 +148,8 @@ public class PaymentControllerTest {
                 }
                 """;
 
-        webTestClient.post()
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .post()
                 .uri("/payment")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
@@ -154,7 +165,9 @@ public class PaymentControllerTest {
                     "amount": -1000
                 }
                 """;
-        webTestClient.post()
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .post()
                 .uri("/payment")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
@@ -171,7 +184,8 @@ public class PaymentControllerTest {
                 }
                 """;
 
-        webTestClient.post()
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .post()
                 .uri("/payment")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
@@ -181,7 +195,8 @@ public class PaymentControllerTest {
 
     @Test
     public void testGetBalance_MissingParameter() {
-        webTestClient.get()
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .get()
                 .uri("/balance")
                 .exchange()
                 .expectStatus().isBadRequest();
@@ -191,11 +206,20 @@ public class PaymentControllerTest {
     public void testProcessPayment_InvalidJson() {
         String invalidJson = "{ invalid json }";
 
-        webTestClient.post()
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockJwt())
+                .post()
                 .uri("/payment")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(invalidJson)
                 .exchange()
                 .expectStatus().isBadRequest();
+    }
+
+    @Test
+    public void testGetBalance_Unauthorized() {
+        webTestClient.get()
+                .uri("/balance?userId=1")
+                .exchange()
+                .expectStatus().isUnauthorized();
     }
 }
