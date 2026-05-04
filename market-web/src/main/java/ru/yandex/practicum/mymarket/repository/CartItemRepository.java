@@ -10,6 +10,8 @@ import java.util.List;
 
 @Repository
 public interface CartItemRepository extends R2dbcRepository<CartItem, Long> {
-    Mono<CartItem> findByProductId(Long productId);
-    Flux<CartItem> findByProductIdIn(List<Long> productIds);
+    Mono<CartItem> findByProductIdAndCartId(Long productId, Long cartId);
+    Flux<CartItem> findByProductIdInAndCartId(List<Long> productIds, Long cartId);
+    Flux<CartItem> findByCartId(Long cartId);
+    Mono<Void> deleteByCartId(Long cartId);
 }
