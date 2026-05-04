@@ -33,10 +33,11 @@ public class SecurityConfig {
         return http
                 .authenticationManager(authenticationManager)
                 .authorizeExchange(auth -> auth
-                        .pathMatchers("/", "/login").permitAll()
+                        .pathMatchers("/", "/login", "/register").permitAll()
                         .pathMatchers(HttpMethod.GET, "/items", "/items/**", "/images/**").permitAll()
                         .anyExchange().authenticated())
                 .formLogin(form -> form
+                        .loginPage("/login")
                         .authenticationSuccessHandler(
                                 new RedirectServerAuthenticationSuccessHandler("/items")))
                 .logout(logout -> logout
