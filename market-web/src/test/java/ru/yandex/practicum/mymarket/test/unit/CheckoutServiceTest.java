@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.yandex.practicum.mymarket.dto.PaymentResult;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
+import ru.yandex.practicum.mymarket.model.Cart;
 import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.CheckoutService;
 import ru.yandex.practicum.mymarket.service.OrderService;
@@ -21,6 +22,10 @@ import static org.mockito.Mockito.*;
 
 class CheckoutServiceTest {
 
+    private static final Long USER_ID = 1L;
+    private static final Long CART_ID = 1L;
+    private static final String USERNAME = "user";
+
     @Mock private ProductService productService;
     @Mock private PaymentClient paymentClient;
     @Mock private OrderService orderService;
@@ -31,14 +36,19 @@ class CheckoutServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+
+        Cart mockCart = new Cart(USER_ID);
+        mockCart.setId(CART_ID);
+        when(cartService.findOrCreateCart(USERNAME)).thenReturn(Mono.just(mockCart));
+
         checkoutService = new CheckoutService(productService, paymentClient, orderService, cartService);
     }
 
     @Test
     void checkout_EmptyCart_ReturnsFailureImmediately() {
-        when(productService.getItemsInCart()).thenReturn(Flux.empty());
+        when(productService.getItemsInCart(CART_ID)).thenReturn(Flux.empty());
 
-        StepVerifier.create(checkoutService.checkout(1L))
+        StepVerifier.create(checkoutService.checkout(USERNAME))
                 .assertNext(r -> {
                     assertThat(r.success()).isFalse();
                     assertThat(r.errorMessage()).isEqualTo("Корзина пуста");
@@ -46,7 +56,7 @@ class CheckoutServiceTest {
                 .verifyComplete();
 
         verify(paymentClient, never()).processPayment(any(), any());
-        verify(orderService, never()).createOrder();
+        verify(orderService, never()).createOrder(any(), any());
     }
 
     @Test
@@ -54,17 +64,17 @@ class CheckoutServiceTest {
         ProductDto item = new ProductDto(1L, "Item", "", "", 300L, 2);
         PaymentResult declined = new PaymentResult(false, "Недостаточно средств", null);
 
-        when(productService.getItemsInCart()).thenReturn(Flux.just(item));
-        when(paymentClient.processPayment(1L, 600L)).thenReturn(Mono.just(declined));
+        when(productService.getItemsInCart(CART_ID)).thenReturn(Flux.just(item));
+        when(paymentClient.processPayment(USER_ID, 600L)).thenReturn(Mono.just(declined));
 
-        StepVerifier.create(checkoutService.checkout(1L))
+        StepVerifier.create(checkoutService.checkout(USERNAME))
                 .assertNext(r -> {
                     assertThat(r.success()).isFalse();
                     assertThat(r.errorMessage()).isEqualTo("Недостаточно средств");
                 })
                 .verifyComplete();
 
-        verify(orderService, never()).createOrder();
+        verify(orderService, never()).createOrder(any(), any());
     }
 
     @Test
@@ -72,10 +82,10 @@ class CheckoutServiceTest {
         ProductDto item = new ProductDto(1L, "Item", "", "", 200L, 1);
         PaymentResult unavailable = new PaymentResult(false, "Сервис платежей недоступен", null);
 
-        when(productService.getItemsInCart()).thenReturn(Flux.just(item));
-        when(paymentClient.processPayment(1L, 200L)).thenReturn(Mono.just(unavailable));
+        when(productService.getItemsInCart(CART_ID)).thenReturn(Flux.just(item));
+        when(paymentClient.processPayment(USER_ID, 200L)).thenReturn(Mono.just(unavailable));
 
-        StepVerifier.create(checkoutService.checkout(1L))
+        StepVerifier.create(checkoutService.checkout(USERNAME))
                 .assertNext(r -> {
                     assertThat(r.success()).isFalse();
                     assertThat(r.errorMessage()).contains("недоступен");
@@ -88,13 +98,13 @@ class CheckoutServiceTest {
         ProductDto item = new ProductDto(1L, "Item", "", "", 300L, 2);
         PaymentResult ok = new PaymentResult(true, "OK", 400L);
 
-        when(productService.getItemsInCart()).thenReturn(Flux.just(item));
-        when(paymentClient.processPayment(1L, 600L)).thenReturn(Mono.just(ok));
-        when(orderService.createOrder()).thenReturn(Mono.just(42L));
-        when(productService.clearCart()).thenReturn(Mono.empty());
-        when(cartService.evictBalanceCache(1L)).thenReturn(Mono.empty());
+        when(productService.getItemsInCart(CART_ID)).thenReturn(Flux.just(item));
+        when(paymentClient.processPayment(USER_ID, 600L)).thenReturn(Mono.just(ok));
+        when(orderService.createOrder(USER_ID, CART_ID)).thenReturn(Mono.just(42L));
+        when(productService.clearCart(CART_ID)).thenReturn(Mono.empty());
+        when(cartService.evictBalanceCache(USER_ID)).thenReturn(Mono.empty());
 
-        StepVerifier.create(checkoutService.checkout(1L))
+        StepVerifier.create(checkoutService.checkout(USERNAME))
                 .assertNext(r -> {
                     assertThat(r.success()).isTrue();
                     assertThat(r.orderId()).isEqualTo(42L);
@@ -102,7 +112,7 @@ class CheckoutServiceTest {
                 })
                 .verifyComplete();
 
-        verify(productService).clearCart();
-        verify(cartService).evictBalanceCache(1L);
+        verify(productService).clearCart(CART_ID);
+        verify(cartService).evictBalanceCache(USER_ID);
     }
 }

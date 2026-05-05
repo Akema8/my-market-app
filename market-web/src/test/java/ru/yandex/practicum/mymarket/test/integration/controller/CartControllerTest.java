@@ -15,10 +15,12 @@ import static org.mockito.Mockito.when;
 
 public class CartControllerTest extends BaseControllerTest {
 
+    private static final String USERNAME = "user";
+
     @Test
     void getCartItems_ReturnsCartPage() {
         CartSummary summary = new CartSummary(List.of(), 0L, 1000L, true, true);
-        when(cartService.getCartSummary(1L)).thenReturn(Mono.just(summary));
+        when(cartService.getCartSummary(USERNAME)).thenReturn(Mono.just(summary));
 
         webTestClient.get()
                 .uri("/cart/items")
@@ -30,7 +32,7 @@ public class CartControllerTest extends BaseControllerTest {
     void getCartItems_WithItems_ReturnsCartPage() {
         ProductDto item = new ProductDto(1L, "Book", "desc", "/img.jpg", 200L, 2);
         CartSummary summary = new CartSummary(List.of(item), 400L, 1000L, true, true);
-        when(cartService.getCartSummary(1L)).thenReturn(Mono.just(summary));
+        when(cartService.getCartSummary(USERNAME)).thenReturn(Mono.just(summary));
 
         webTestClient.get()
                 .uri("/cart/items")
@@ -41,7 +43,7 @@ public class CartControllerTest extends BaseControllerTest {
     @Test
     void getCartItems_ServiceUnavailable_StillReturnsCartPage() {
         CartSummary summary = new CartSummary(List.of(), 0L, 0L, false, false);
-        when(cartService.getCartSummary(1L)).thenReturn(Mono.just(summary));
+        when(cartService.getCartSummary(USERNAME)).thenReturn(Mono.just(summary));
 
         webTestClient.get()
                 .uri("/cart/items")
@@ -53,7 +55,7 @@ public class CartControllerTest extends BaseControllerTest {
     void updateCartItem_Increment_ReturnsCartPage() {
         ProductDto item = new ProductDto(1L, "Book", "desc", "/img.jpg", 200L, 3);
         CartSummary summary = new CartSummary(List.of(item), 600L, 1000L, true, true);
-        when(cartService.updateItemAndGetSummary(eq(1L), eq("increment"), eq(1L)))
+        when(cartService.updateItemAndGetSummary(eq(1L), eq("increment"), eq(USERNAME)))
                 .thenReturn(Mono.just(summary));
 
         webTestClient.post()
@@ -67,7 +69,7 @@ public class CartControllerTest extends BaseControllerTest {
     @Test
     void updateCartItem_Decrement_ReturnsCartPage() {
         CartSummary summary = new CartSummary(List.of(), 0L, 1000L, true, true);
-        when(cartService.updateItemAndGetSummary(eq(1L), eq("decrement"), eq(1L)))
+        when(cartService.updateItemAndGetSummary(eq(1L), eq("decrement"), eq(USERNAME)))
                 .thenReturn(Mono.just(summary));
 
         webTestClient.post()
@@ -82,7 +84,7 @@ public class CartControllerTest extends BaseControllerTest {
     void updateCartItem_InsufficientFunds_StillReturnsCartPage() {
         ProductDto item = new ProductDto(1L, "Book", "desc", "/img.jpg", 200L, 10);
         CartSummary summary = new CartSummary(List.of(item), 2000L, 500L, false, true);
-        when(cartService.updateItemAndGetSummary(any(), any(), eq(1L)))
+        when(cartService.updateItemAndGetSummary(any(), any(), eq(USERNAME)))
                 .thenReturn(Mono.just(summary));
 
         webTestClient.post()

@@ -1,19 +1,28 @@
 package ru.yandex.practicum.mymarket.test.integration.controller;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import ru.yandex.practicum.mymarket.test.integration.BaseIntegrationTest;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
+@WithMockUser(roles = "ADMIN")
 class ProductRestControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @BeforeEach
+    void setUp() {
+        webTestClient = webTestClient.mutateWith(SecurityMockServerConfigurers.csrf());
+    }
 
     @Test
     void testCreateItem() {

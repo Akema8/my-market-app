@@ -12,6 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class CartItemRepositoryTest extends BaseRepositoryTest {
 
+    private static final Long CART_ID = 1L;
+
     @BeforeEach
     public void setUp() {
         cartItemRepository.deleteAll().block();
@@ -21,13 +23,12 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
     @Test
     public void testFindByProductId() {
         Product product = new Product("Test Product", "Desc", "img.jpg", 100L);
-
         Long productId = productRepository.save(product).block().getId();
 
-        CartItem cartItem = new CartItem(productId, 3);
+        CartItem cartItem = new CartItem(CART_ID, productId, 3);
         cartItemRepository.save(cartItem).block();
 
-        StepVerifier.create(cartItemRepository.findByProductId(productId))
+        StepVerifier.create(cartItemRepository.findByProductIdAndCartId(productId, CART_ID))
                 .assertNext(found -> {
                     assertThat(found.getProductId()).isEqualTo(productId);
                     assertThat(found.getCount()).isEqualTo(3);
@@ -43,15 +44,11 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
         Long productId1 = productRepository.save(product1).block().getId();
         Long productId2 = productRepository.save(product2).block().getId();
 
-        CartItem item1 = new CartItem(productId1, 2);
-        CartItem item2 = new CartItem(productId2, 5);
-        CartItem item3 = new CartItem(productId1, 4);
+        cartItemRepository.save(new CartItem(CART_ID, productId1, 2)).block();
+        cartItemRepository.save(new CartItem(CART_ID, productId2, 5)).block();
+        cartItemRepository.save(new CartItem(CART_ID, productId1, 4)).block();
 
-        cartItemRepository.save(item1).block();
-        cartItemRepository.save(item2).block();
-        cartItemRepository.save(item3).block();
-
-        StepVerifier.create(cartItemRepository.findByProductIdIn(List.of(productId1, productId2)))
+        StepVerifier.create(cartItemRepository.findByProductIdInAndCartId(List.of(productId1, productId2), CART_ID))
                 .expectNextCount(3)
                 .verifyComplete();
     }
