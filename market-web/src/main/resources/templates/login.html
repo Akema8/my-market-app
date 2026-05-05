@@ -13,14 +13,15 @@
         <span class="badge text-bg-success">Витрина магазина</span>
     </h2>
 
-    <div th:if="${param.error}" class="alert alert-danger">Неверный логин или пароль.</div>
-    <div th:if="${param.logout}" class="alert alert-success">Вы вышли из системы.</div>
-    <div th:if="${param.registered}" class="alert alert-success">Регистрация прошла успешно. Войдите в систему.</div>
+    <div th:if="${hasError}" class="alert alert-danger">Неверный логин или пароль.</div>
+    <div th:if="${hasLogout}" class="alert alert-success">Вы вышли из системы.</div>
+    <div th:if="${hasRegistered}" class="alert alert-success">Регистрация прошла успешно. Войдите в систему.</div>
 
     <div class="card">
         <div class="card-body">
             <h5 class="card-title mb-3">Вход</h5>
             <form th:action="@{/login}" method="post">
+                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                 <div class="mb-3">
                     <label for="username" class="form-label">Логин</label>
                     <input type="text" class="form-control" id="username" name="username" required autofocus>

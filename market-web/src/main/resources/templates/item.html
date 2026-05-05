@@ -25,9 +25,10 @@
                         <span sec:authentication="name"></span>
                     </span>
                     <form th:action="@{/logout}" method="post" class="mb-0" sec:authorize="isAuthenticated()">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                         <button type="submit" class="btn btn-outline-secondary btn-sm">Выйти</button>
                     </form>
-                    <a href="/login" class="btn btn-outline-primary btn-sm" sec:authorize="!isAuthenticated()">Войти</a>
+                    <a href="/login" class="btn btn-outline-primary btn-sm" sec:authorize="isAnonymous()">Войти</a>
                 </div>
             </div>
         </div>
@@ -43,6 +44,7 @@
                         <p class="card-text" th:text="${item.description()}"></p>
                         <div sec:authorize="isAuthenticated()">
                             <form th:action="@{${'/items/'+item.id()}}" method="post">
+                                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                                 <div class="hstack gap-3">
                                     <button type="submit" class="btn btn-outline-secondary" name="action" value="MINUS">-</button>
                                     <span th:text="${item.count()}"></span>

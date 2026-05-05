@@ -19,6 +19,7 @@
         <div class="card-body">
             <h5 class="card-title mb-3">Регистрация</h5>
             <form th:action="@{/register}" method="post">
+                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                 <div class="mb-3">
                     <label for="username" class="form-label">Логин</label>
                     <input type="text" class="form-control" id="username" name="username"

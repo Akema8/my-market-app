@@ -24,6 +24,7 @@
                         <span sec:authentication="name"></span>
                     </span>
                     <form th:action="@{/logout}" method="post" class="mb-0">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                         <button type="submit" class="btn btn-outline-secondary btn-sm">Выйти</button>
                     </form>
                 </div>
@@ -40,6 +41,7 @@
                         </h5>
                         <p class="card-text" th:text="${item.description()}"></p>
                         <form th:action="@{/cart/items}" method="post">
+                            <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                             <div class="hstack gap-3">
                                 <input type="hidden" name="id" th:value="${item.id()}">
                                 <button type="submit" class="btn btn-outline-secondary" name="action" value="MINUS">-</button>
@@ -73,6 +75,7 @@
         <div class="row p-2" th:if="${!items.isEmpty()}">
             <div class="col">
                 <form action="/buy" method="post" th:if="${hasSufficientFunds}">
+                    <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                     <button class="btn btn-warning w-100">Купить</button>
                 </form>
                 <div th:unless="${hasSufficientFunds}">

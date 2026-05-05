@@ -45,6 +45,7 @@ public class ProductController {
             Authentication authentication,
             Model model
     ) {
+        boolean authenticated = isUserAuthenticated(authentication);
         Mono<Long> cartIdMono = resolveCartId(authentication);
 
         return cartIdMono.flatMap(cartId ->
@@ -60,6 +61,8 @@ public class ProductController {
                             model.addAttribute("sort", sort);
                             model.addAttribute("paging", new Paging(pageSize, pageNumber,
                                     page.hasPrevious(), page.hasNext()));
+                            model.addAttribute("isAuthenticated", authenticated);
+                            model.addAttribute("username", authenticated ? authentication.getName() : null);
                             return "items";
                         })
         );
@@ -133,9 +136,14 @@ public class ProductController {
         );
     }
 
+    private boolean isUserAuthenticated(Authentication authentication) {
+        return authentication != null
+                && authentication.isAuthenticated()
+                && !"anonymousUser".equals(authentication.getName());
+    }
+
     private Mono<Long> resolveCartId(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()
-                || "anonymousUser".equals(authentication.getName())) {
+        if (!isUserAuthenticated(authentication)) {
             return Mono.just(0L);
         }
         return cartService.findOrCreateCart(authentication.getName())

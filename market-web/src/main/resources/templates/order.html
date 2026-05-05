@@ -30,6 +30,7 @@
                     <span sec:authentication="name"></span>
                 </span>
                 <form th:action="@{/logout}" method="post" class="mb-0">
+                    <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                     <button type="submit" class="btn btn-outline-secondary btn-sm">Выйти</button>
                 </form>
             </div>
