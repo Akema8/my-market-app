@@ -3,21 +3,17 @@ package ru.yandex.practicum.mymarket.controller;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ServerWebExchange;
 
 @Controller
 public class LoginController {
 
     @GetMapping("/login")
-    public String loginPage(
-            @RequestParam(required = false) String error,
-            @RequestParam(required = false) String logout,
-            @RequestParam(required = false) String registered,
-            Model model
-    ) {
-        model.addAttribute("hasError", error != null);
-        model.addAttribute("hasLogout", logout != null);
-        model.addAttribute("hasRegistered", registered != null);
+    public String loginPage(ServerWebExchange exchange, Model model) {
+        var params = exchange.getRequest().getQueryParams();
+        model.addAttribute("hasError", params.containsKey("error"));
+        model.addAttribute("hasLogout", params.containsKey("logout"));
+        model.addAttribute("hasRegistered", params.containsKey("registered"));
         return "login";
     }
 }

@@ -2,6 +2,7 @@ package ru.yandex.practicum.mymarket.test.integration.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.CartSummary;
@@ -11,6 +12,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
 
 public class CartControllerTest extends BaseControllerTest {
@@ -93,5 +95,48 @@ public class CartControllerTest extends BaseControllerTest {
                 .body(BodyInserters.fromFormData("id", "1").with("action", "increment"))
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    @Test
+    void getCartItems_UsesAuthenticatedUsername() {
+        CartSummary summary = new CartSummary(List.of(), 0L, 1000L, true, true);
+        when(cartService.getCartSummary(USERNAME)).thenReturn(Mono.just(summary));
+
+        webTestClient.get().uri("/cart/items")
+                .exchange()
+                .expectStatus().isOk();
+
+        verify(cartService).getCartSummary(USERNAME);
+        verify(cartService, never()).getCartSummary("alice");
+    }
+
+    @Test
+    @WithMockUser(username = "alice")
+    void getCartItems_WithDifferentUser_UsesAlicesUsername() {
+        CartSummary summary = new CartSummary(List.of(), 0L, 500L, true, true);
+        when(cartService.getCartSummary("alice")).thenReturn(Mono.just(summary));
+
+        webTestClient.get().uri("/cart/items")
+                .exchange()
+                .expectStatus().isOk();
+
+        verify(cartService).getCartSummary("alice");
+        verify(cartService, never()).getCartSummary(USERNAME);
+    }
+
+    @Test
+    void updateCartItem_UsesAuthenticatedUsernameForCartLookup() {
+        CartSummary summary = new CartSummary(List.of(), 0L, 1000L, true, true);
+        when(cartService.updateItemAndGetSummary(eq(1L), eq("increment"), eq(USERNAME)))
+                .thenReturn(Mono.just(summary));
+
+        webTestClient.post()
+                .uri("/cart/items")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("id", "1").with("action", "increment"))
+                .exchange()
+                .expectStatus().isOk();
+
+        verify(cartService).updateItemAndGetSummary(1L, "increment", USERNAME);
     }
 }
