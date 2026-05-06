@@ -1,5 +1,6 @@
 package ru.yandex.practicum.mymarket.controller;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.server.WebSession;
@@ -9,8 +10,6 @@ import ru.yandex.practicum.mymarket.service.CheckoutService;
 @Controller
 public class CheckoutController {
 
-    private static final Long USER_ID = 1L;
-
     private final CheckoutService checkoutService;
 
     public CheckoutController(CheckoutService checkoutService) {
@@ -18,8 +17,8 @@ public class CheckoutController {
     }
 
     @PostMapping("/buy")
-    public Mono<String> checkout(WebSession session) {
-        return checkoutService.checkout(USER_ID)
+    public Mono<String> checkout(Authentication authentication, WebSession session) {
+        return checkoutService.checkout(authentication.getName())
                 .map(result -> {
                     if (!result.success()) {
                         session.getAttributes().put("error", result.errorMessage());

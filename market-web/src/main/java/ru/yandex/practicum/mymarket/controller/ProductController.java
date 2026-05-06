@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +16,7 @@ import ru.yandex.practicum.mymarket.dto.ChangeQuantityForm;
 import ru.yandex.practicum.mymarket.dto.CreateProductDto;
 import ru.yandex.practicum.mymarket.dto.Paging;
 import ru.yandex.practicum.mymarket.dto.ProductDto;
+import ru.yandex.practicum.mymarket.service.CartService;
 import ru.yandex.practicum.mymarket.service.ProductService;
 
 import java.util.ArrayList;
@@ -27,9 +29,11 @@ public class ProductController {
     private static final Logger log = LoggerFactory.getLogger(ProductController.class);
 
     private final ProductService productService;
+    private final CartService cartService;
 
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, CartService cartService) {
         this.productService = productService;
+        this.cartService = cartService;
     }
 
     @GetMapping
@@ -38,29 +42,35 @@ public class ProductController {
             @RequestParam(value = "sort", required = false, defaultValue = "NO") String sort,
             @RequestParam(value = "pageNumber", required = false, defaultValue = "1") int pageNumber,
             @RequestParam(value = "pageSize", required = false, defaultValue = "5") int pageSize,
+            Authentication authentication,
             Model model
     ) {
-        return productService.findItems(search, sort, pageNumber, pageSize)
-                .map(page -> {
-                    List<ProductDto> items = page.getContent();
-                    List<List<ProductDto>> itemRows = new ArrayList<>();
-                    for (int i = 0; i < items.size(); i += 3) {
-                        itemRows.add(items.subList(i, Math.min(i + 3, items.size())));
-                    }
-                    model.addAttribute("items", itemRows);
-                    model.addAttribute("search", search);
-                    model.addAttribute("sort", sort);
-                    model.addAttribute("paging", new Paging(pageSize, pageNumber,
-                            page.hasPrevious(), page.hasNext()));
-                    return "items";
-                });
+        boolean authenticated = isUserAuthenticated(authentication);
+        Mono<Long> cartIdMono = resolveCartId(authentication);
+
+        return cartIdMono.flatMap(cartId ->
+                productService.findItems(search, sort, pageNumber, pageSize, cartId == 0 ? null : cartId)
+                        .map(page -> {
+                            List<ProductDto> items = page.getContent();
+                            List<List<ProductDto>> itemRows = new ArrayList<>();
+                            for (int i = 0; i < items.size(); i += 3) {
+                                itemRows.add(items.subList(i, Math.min(i + 3, items.size())));
+                            }
+                            model.addAttribute("items", itemRows);
+                            model.addAttribute("search", search);
+                            model.addAttribute("sort", sort);
+                            model.addAttribute("paging", new Paging(pageSize, pageNumber,
+                                    page.hasPrevious(), page.hasNext()));
+                            model.addAttribute("isAuthenticated", authenticated);
+                            model.addAttribute("username", authenticated ? authentication.getName() : null);
+                            return "items";
+                        })
+        );
     }
 
     @PostMapping
-    public Mono<String> changeItemQuantity(@ModelAttribute ChangeQuantityForm form) {
-        log.info("POST /items changeItemQuantity - id={}, action={}, search={}, sort={}, pageNumber={}, pageSize={}",
-                form.getId(), form.getAction(), form.getSearch(), form.getSort(),
-                form.getPageNumber(), form.getPageSize());
+    public Mono<String> changeItemQuantity(@ModelAttribute ChangeQuantityForm form, Authentication authentication) {
+        log.info("POST /items changeItemQuantity - id={}, action={}", form.getId(), form.getAction());
 
         String search = form.getSearch() != null ? form.getSearch() : "";
         String sort = form.getSort() != null ? form.getSort() : "NO";
@@ -76,28 +86,37 @@ public class ProductController {
                 .build()
                 .toUriString();
 
-        return productService.changeItemQuantity(form.getId(), form.getAction())
+        return cartService.findOrCreateCart(authentication.getName())
+                .flatMap(cart -> productService.changeItemQuantity(form.getId(), form.getAction(), cart.getId()))
                 .thenReturn("redirect:" + redirectUrl);
     }
 
     @GetMapping("/{id}")
-    public Mono<String> getItemPage(@PathVariable Long id, Model model) {
-        return productService.getItemById(id)
-                .map(product -> {
-                    model.addAttribute("item", product);
-                    return "item";
-                });
+    public Mono<String> getItemPage(@PathVariable Long id, Authentication authentication, Model model) {
+        Mono<Long> cartIdMono = resolveCartId(authentication);
+
+        return cartIdMono.flatMap(cartId ->
+                productService.getItemById(id, cartId == 0 ? null : cartId)
+                        .map(product -> {
+                            model.addAttribute("item", product);
+                            return "item";
+                        })
+        );
     }
 
     @PostMapping("/{id}")
     public Mono<String> updateItemCountInCart(
             @PathVariable("id") Long id,
             @ModelAttribute CartItemForm form,
+            Authentication authentication,
             Model model
     ) {
         log.info("POST /items/{} - action={}", id, form.getAction());
-        return productService.changeItemQuantity(id, form.getAction())
-                .then(productService.getItemById(id))
+        return cartService.findOrCreateCart(authentication.getName())
+                .flatMap(cart ->
+                        productService.changeItemQuantity(id, form.getAction(), cart.getId())
+                                .then(productService.getItemById(id, cart.getId()))
+                )
                 .map(product -> {
                     model.addAttribute("item", product);
                     return "item";
@@ -115,5 +134,19 @@ public class ProductController {
                 request.imgPath(),
                 request.price()
         );
+    }
+
+    private boolean isUserAuthenticated(Authentication authentication) {
+        return authentication != null
+                && authentication.isAuthenticated()
+                && !"anonymousUser".equals(authentication.getName());
+    }
+
+    private Mono<Long> resolveCartId(Authentication authentication) {
+        if (!isUserAuthenticated(authentication)) {
+            return Mono.just(0L);
+        }
+        return cartService.findOrCreateCart(authentication.getName())
+                .map(cart -> cart.getId());
     }
 }

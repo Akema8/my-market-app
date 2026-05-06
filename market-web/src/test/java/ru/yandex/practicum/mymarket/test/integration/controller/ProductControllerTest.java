@@ -21,7 +21,7 @@ public class ProductControllerTest extends BaseControllerTest {
                 new ProductDto(1L, "Product1", "Desc1", "img1.png", 100L, 2),
                 new ProductDto(2L, "Product2", "Desc2", "img2.png", 200L, 0)
         ));
-        when(productService.findItems(any(), anyString(), anyInt(), anyInt()))
+        when(productService.findItems(any(), anyString(), anyInt(), anyInt(), any()))
                 .thenReturn(Mono.just(mockPage));
 
         webTestClient.get()
@@ -37,7 +37,7 @@ public class ProductControllerTest extends BaseControllerTest {
                 new ProductDto(2L, "Product2", "Desc2", "img2.png", 200L, 0),
                 new ProductDto(3L, "Product3", "Desc3", "img3.png", 300L, 1)
         ));
-        when(productService.findItems(eq("searchTerm"), eq("PRICE"), eq(2), eq(3)))
+        when(productService.findItems(eq("searchTerm"), eq("PRICE"), eq(2), eq(3), any()))
                 .thenReturn(Mono.just(mockPage));
 
         webTestClient.get()
@@ -49,7 +49,7 @@ public class ProductControllerTest extends BaseControllerTest {
     @Test
     public void testGetItemPage() {
         var mockProduct = new ProductDto(1L, "Test Product", "Desc", "img.png", 100L, 0);
-        when(productService.getItemById(1L)).thenReturn(Mono.just(mockProduct));
+        when(productService.getItemById(eq(1L), any())).thenReturn(Mono.just(mockProduct));
 
         webTestClient.get()
                 .uri("/items/1")
@@ -59,7 +59,7 @@ public class ProductControllerTest extends BaseControllerTest {
 
     @Test
     public void testChangeItemQuantity_WithSpecialCharactersInSearch() {
-        when(productService.changeItemQuantity(anyLong(), anyString()))
+        when(productService.changeItemQuantity(anyLong(), anyString(), anyLong()))
                 .thenReturn(Mono.empty());
 
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
@@ -81,7 +81,7 @@ public class ProductControllerTest extends BaseControllerTest {
 
     @Test
     public void testChangeItemQuantity_WithCyrillicAndSpecialChars() {
-        when(productService.changeItemQuantity(anyLong(), anyString()))
+        when(productService.changeItemQuantity(anyLong(), anyString(), anyLong()))
                 .thenReturn(Mono.empty());
 
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();

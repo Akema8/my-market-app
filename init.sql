@@ -2,10 +2,18 @@ CREATE DATABASE IF NOT EXISTS my_market CHARACTER SET utf8mb4 COLLATE utf8mb4_un
 USE my_market;
 SET NAMES utf8mb4;
 
+DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS cart_items;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS products;
+
+CREATE TABLE users (
+    id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50)  NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    enabled  BOOLEAN      NOT NULL DEFAULT TRUE
+);
 
 CREATE TABLE products (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -17,13 +25,21 @@ CREATE TABLE products (
 
 CREATE TABLE orders (
     id        BIGINT AUTO_INCREMENT PRIMARY KEY,
-    total_sum BIGINT
+    total_sum BIGINT,
+    user_id   BIGINT
 );
+
+CREATE TABLE carts (
+    id        BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id   BIGINT
+);
+
 
 CREATE TABLE cart_items (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     count      INT NOT NULL,
-    product_id BIGINT
+    product_id BIGINT,
+    cart_id    BIGINT
 );
 
 CREATE TABLE order_items (

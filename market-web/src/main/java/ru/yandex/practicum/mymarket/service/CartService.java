@@ -9,6 +9,9 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.cache.CacheKeys;
 import ru.yandex.practicum.mymarket.dto.BalanceResponse;
 import ru.yandex.practicum.mymarket.dto.CartSummary;
+import ru.yandex.practicum.mymarket.model.Cart;
+import ru.yandex.practicum.mymarket.repository.CartRepository;
+import ru.yandex.practicum.mymarket.repository.UserRepository;
 
 import java.time.Duration;
 
@@ -21,25 +24,75 @@ public class CartService {
     private final PaymentClient paymentClient;
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final Duration balanceCacheTtl;
+    private final UserRepository userRepository;
+    private final CartRepository cartRepository;
 
     public CartService(ProductService productService,
                        PaymentClient paymentClient,
                        ReactiveRedisTemplate<String, Object> redisTemplate,
-                       @Qualifier("balanceCacheTtl") Duration balanceCacheTtl) {
+                       @Qualifier("balanceCacheTtl") Duration balanceCacheTtl,
+                       UserRepository userRepository,
+                       CartRepository cartRepository) {
         this.productService = productService;
         this.paymentClient = paymentClient;
         this.redisTemplate = redisTemplate;
         this.balanceCacheTtl = balanceCacheTtl;
+        this.userRepository = userRepository;
+        this.cartRepository = cartRepository;
     }
 
-    public Mono<CartSummary> getCartSummary(Long userId) {
-        return productService.getItemsInCart()
+    public Mono<Cart> findOrCreateCart(String username) {
+        return userRepository.findByUsername(username)
+                .flatMap(user -> cartRepository.findByUserId(user.getId())
+                        .switchIfEmpty(Mono.defer(() ->
+                                cartRepository.save(new Cart(user.getId()))
+                                        .doOnNext(c -> log.info("Created cart {} for user {}", c.getId(), user.getId()))
+                        ))
+                );
+    }
+
+    public Mono<CartSummary> getCartSummary(String username) {
+        return findOrCreateCart(username)
+                .flatMap(cart ->
+                        productService.getItemsInCart(cart.getId())
+                                .collectList()
+                                .flatMap(cartItems -> {
+                                    long total = cartItems.stream()
+                                            .mapToLong(item -> item.price() * item.count())
+                                            .sum();
+                                    return getBalanceCached(cart.getUserId())
+                                            .map(balance -> new CartSummary(
+                                                    cartItems,
+                                                    total,
+                                                    balance.balance(),
+                                                    balance.balance() >= total,
+                                                    balance.balance() > 0 || total == 0
+                                            ));
+                                })
+                );
+    }
+
+    public Mono<CartSummary> updateItemAndGetSummary(Long productId, String action, String username) {
+        return findOrCreateCart(username)
+                .flatMap(cart ->
+                        productService.changeItemQuantity(productId, action, cart.getId())
+                                .then(getCartSummaryByCart(cart))
+                );
+    }
+
+    public Mono<Void> evictBalanceCache(Long userId) {
+        log.info("Evicting balance cache for user {}", userId);
+        return redisTemplate.delete(CacheKeys.balance(userId)).then();
+    }
+
+    private Mono<CartSummary> getCartSummaryByCart(Cart cart) {
+        return productService.getItemsInCart(cart.getId())
                 .collectList()
                 .flatMap(cartItems -> {
                     long total = cartItems.stream()
                             .mapToLong(item -> item.price() * item.count())
                             .sum();
-                    return getBalanceCached(userId)
+                    return getBalanceCached(cart.getUserId())
                             .map(balance -> new CartSummary(
                                     cartItems,
                                     total,
@@ -48,16 +101,6 @@ public class CartService {
                                     balance.balance() > 0 || total == 0
                             ));
                 });
-    }
-
-    public Mono<CartSummary> updateItemAndGetSummary(Long productId, String action, Long userId) {
-        return productService.changeItemQuantity(productId, action)
-                .then(getCartSummary(userId));
-    }
-
-    public Mono<Void> evictBalanceCache(Long userId) {
-        log.info("Evicting balance cache for user {}", userId);
-        return redisTemplate.delete(CacheKeys.balance(userId)).then();
     }
 
     private Mono<BalanceResponse> getBalanceCached(Long userId) {

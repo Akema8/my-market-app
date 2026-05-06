@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 
 <head>
     <meta charset="utf-8">
@@ -16,9 +17,18 @@
                     <h2>
                         <span class="badge text-bg-success">Витрина магазина</span>
                     </h2>
-                    <a href="/orders" class="btn btn-secondary ms-auto bi bi-file-earmark-text"> Заказы</a>
-                    <a href="/cart/items" class="btn btn-secondary bi bi-cart4"> Корзина</a>
+                    <a href="/orders" class="btn btn-secondary ms-auto bi bi-file-earmark-text" sec:authorize="isAuthenticated()"> Заказы</a>
+                    <a href="/cart/items" class="btn btn-secondary bi bi-cart4" sec:authorize="isAuthenticated()"> Корзина</a>
                     <a href="/items" class="btn btn-secondary bi bi-arrow-left-square"> Главная</a>
+                    <span class="text-muted small align-self-center" sec:authorize="isAuthenticated()">
+                        <i class="bi bi-person-fill"></i>
+                        <span sec:authentication="name"></span>
+                    </span>
+                    <form th:action="@{/logout}" method="post" class="mb-0" sec:authorize="isAuthenticated()">
+                        <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">Выйти</button>
+                    </form>
+                    <a href="/login" class="btn btn-outline-primary btn-sm" sec:authorize="isAnonymous()">Войти</a>
                 </div>
             </div>
         </div>
@@ -32,14 +42,17 @@
                             <span class="badge text-bg-success justify-content-end" th:text="${item.price()}+' руб.'"></span>
                         </h5>
                         <p class="card-text" th:text="${item.description()}"></p>
-                        <form th:action="@{${'/items/'+item.id()}}" method="post">
-                            <div class="hstack gap-3">
-                                <button type="submit" class="btn btn-outline-secondary" name="action" value="MINUS">-</button>
-                                <span th:text="${item.count()}"></span>
-                                <button type="submit" class="btn btn-outline-secondary" name="action" value="PLUS">+</button>
-                                <button type="submit" class="btn btn-warning ms-auto bi bi-cart4" name="action" value="PLUS" th:if="${item.count()==0}"></button>
-                            </div>
-                        </form>
+                        <div sec:authorize="isAuthenticated()">
+                            <form th:action="@{${'/items/'+item.id()}}" method="post">
+                                <input type="hidden" th:if="${_csrf}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <div class="hstack gap-3">
+                                    <button type="submit" class="btn btn-outline-secondary" name="action" value="MINUS">-</button>
+                                    <span th:text="${item.count()}"></span>
+                                    <button type="submit" class="btn btn-outline-secondary" name="action" value="PLUS">+</button>
+                                    <button type="submit" class="btn btn-warning ms-auto bi bi-cart4" name="action" value="PLUS" th:if="${item.count()==0}"></button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>

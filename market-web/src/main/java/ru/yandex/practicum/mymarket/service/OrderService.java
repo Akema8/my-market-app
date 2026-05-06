@@ -1,7 +1,9 @@
 package ru.yandex.practicum.mymarket.service;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.mymarket.dto.OrderDto;
@@ -26,26 +28,36 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
 
-    public OrderService(OrderRepository orderRepository, OrderItemRepository orderItemRepository, CartItemRepository cartItemRepository, ProductRepository productRepository) {
+    public OrderService(OrderRepository orderRepository, OrderItemRepository orderItemRepository,
+                        CartItemRepository cartItemRepository, ProductRepository productRepository) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartItemRepository = cartItemRepository;
         this.productRepository = productRepository;
     }
 
-    public Flux<OrderDto> getAllOrders() {
-
-        return orderRepository.findAll().flatMap(this::assembleOrderDto);
+    public Flux<OrderDto> getAllOrders(Long userId) {
+        return orderRepository.findByUserId(userId).flatMap(this::assembleOrderDto);
     }
 
     public Mono<OrderDto> getOrderById(Long id) {
-
         return orderRepository.findById(id).flatMap(this::assembleOrderDto);
     }
 
+    public Mono<OrderDto> getOrderByIdForUser(Long id, Long userId) {
+        return orderRepository.findById(id)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND)))
+                .flatMap(order -> {
+                    if (!userId.equals(order.getUserId())) {
+                        return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN));
+                    }
+                    return assembleOrderDto(order);
+                });
+    }
+
     @Transactional
-    public Mono<Long> createOrder() {
-        return cartItemRepository.findAll()
+    public Mono<Long> createOrder(Long userId, Long cartId) {
+        return cartItemRepository.findByCartId(cartId)
                 .collectList()
                 .flatMap(cartItems -> {
                     List<Long> productIds = cartItems.stream()
@@ -59,7 +71,7 @@ public class OrderService {
                                         .mapToLong(ci -> productMap.get(ci.getProductId()).getPrice() * ci.getCount())
                                         .sum();
 
-                                Order order = new Order(totalSum);
+                                Order order = new Order(totalSum, userId);
                                 return orderRepository.save(order)
                                         .flatMap(savedOrder -> {
                                             List<OrderItem> items = cartItems.stream()
@@ -94,7 +106,7 @@ public class OrderService {
                     }
                     return productRepository.findAllById(productIds)
                             .collectMap(p -> p.getId())
-                            .map((Map<Long, ru.yandex.practicum.mymarket.model.Product> productMap) -> {
+                            .map((Map<Long, Product> productMap) -> {
                                 List<OrderItemDto> itemDtos = items.stream()
                                         .map(oi -> new OrderItemDto(
                                                 oi.getId(),

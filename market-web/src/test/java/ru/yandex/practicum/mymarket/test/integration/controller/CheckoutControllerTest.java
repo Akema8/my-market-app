@@ -10,7 +10,7 @@ public class CheckoutControllerTest extends BaseControllerTest {
 
     @Test
     void checkout_Success_RedirectsToNewOrder() {
-        when(checkoutService.checkout(1L))
+        when(checkoutService.checkout("user"))
                 .thenReturn(Mono.just(CheckoutResult.success(42L, 800L)));
 
         webTestClient.post()
@@ -22,7 +22,7 @@ public class CheckoutControllerTest extends BaseControllerTest {
 
     @Test
     void checkout_EmptyCart_RedirectsToCart() {
-        when(checkoutService.checkout(1L))
+        when(checkoutService.checkout("user"))
                 .thenReturn(Mono.just(CheckoutResult.failure("Корзина пуста")));
 
         webTestClient.post()
@@ -34,7 +34,7 @@ public class CheckoutControllerTest extends BaseControllerTest {
 
     @Test
     void checkout_PaymentDeclined_RedirectsToCart() {
-        when(checkoutService.checkout(1L))
+        when(checkoutService.checkout("user"))
                 .thenReturn(Mono.just(CheckoutResult.failure("Недостаточно средств")));
 
         webTestClient.post()
@@ -46,7 +46,7 @@ public class CheckoutControllerTest extends BaseControllerTest {
 
     @Test
     void checkout_ServiceUnavailable_RedirectsToCart() {
-        when(checkoutService.checkout(1L))
+        when(checkoutService.checkout("user"))
                 .thenReturn(Mono.just(CheckoutResult.failure("Сервис платежей недоступен")));
 
         webTestClient.post()

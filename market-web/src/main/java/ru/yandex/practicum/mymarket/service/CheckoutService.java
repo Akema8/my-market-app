@@ -26,38 +26,44 @@ public class CheckoutService {
         this.cartService = cartService;
     }
 
-    public Mono<CheckoutResult> checkout(Long userId) {
-        return productService.getItemsInCart()
-                .collectList()
-                .flatMap(cartItems -> {
-                    if (cartItems.isEmpty()) {
-                        return Mono.just(CheckoutResult.failure("Корзина пуста"));
-                    }
+    public Mono<CheckoutResult> checkout(String username) {
+        return cartService.findOrCreateCart(username)
+                .flatMap(cart -> {
+                    Long userId = cart.getUserId();
+                    Long cartId = cart.getId();
 
-                    long total = cartItems.stream()
-                            .mapToLong(item -> item.price() * item.count())
-                            .sum();
-
-                    log.info("Processing checkout for user {}, total amount: {}", userId, total);
-
-                    return paymentClient.processPayment(userId, total)
-                            .flatMap(paymentResult -> {
-                                if (!paymentResult.success()) {
-                                    log.warn("Payment failed: {}", paymentResult.message());
-                                    return Mono.just(CheckoutResult.failure(paymentResult.message()));
+                    return productService.getItemsInCart(cartId)
+                            .collectList()
+                            .flatMap(cartItems -> {
+                                if (cartItems.isEmpty()) {
+                                    return Mono.just(CheckoutResult.failure("Корзина пуста"));
                                 }
 
-                                log.info("Payment successful, creating order");
-                                return orderService.createOrder()
-                                        .flatMap(orderId -> {
-                                            log.info("Order created: {}, clearing cart and balance cache", orderId);
-                                            return productService.clearCart()
-                                                    .then(cartService.evictBalanceCache(userId))
-                                                    .thenReturn(orderId);
-                                        })
-                                        .map(orderId -> {
-                                            log.info("Checkout complete, order: {}", orderId);
-                                            return CheckoutResult.success(orderId, paymentResult.remainingBalance());
+                                long total = cartItems.stream()
+                                        .mapToLong(item -> item.price() * item.count())
+                                        .sum();
+
+                                log.info("Processing checkout for user {}, total amount: {}", userId, total);
+
+                                return paymentClient.processPayment(userId, total)
+                                        .flatMap(paymentResult -> {
+                                            if (!paymentResult.success()) {
+                                                log.warn("Payment failed: {}", paymentResult.message());
+                                                return Mono.just(CheckoutResult.failure(paymentResult.message()));
+                                            }
+
+                                            log.info("Payment successful, creating order");
+                                            return orderService.createOrder(userId, cartId)
+                                                    .flatMap(orderId -> {
+                                                        log.info("Order created: {}, clearing cart and balance cache", orderId);
+                                                        return productService.clearCart(cartId)
+                                                                .then(cartService.evictBalanceCache(userId))
+                                                                .thenReturn(orderId);
+                                                    })
+                                                    .map(orderId -> {
+                                                        log.info("Checkout complete, order: {}", orderId);
+                                                        return CheckoutResult.success(orderId, paymentResult.remainingBalance());
+                                                    });
                                         });
                             });
                 });

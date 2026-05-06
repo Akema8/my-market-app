@@ -1,5 +1,6 @@
 package ru.yandex.practicum.mymarket.controller;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -11,8 +12,6 @@ import ru.yandex.practicum.mymarket.service.CartService;
 @RequestMapping("/cart")
 public class CartController {
 
-    private static final Long USER_ID = 1L;
-
     private final CartService cartService;
 
     public CartController(CartService cartService) {
@@ -20,8 +19,8 @@ public class CartController {
     }
 
     @GetMapping("/items")
-    public Mono<String> getCartItems(Model model) {
-        return cartService.getCartSummary(USER_ID)
+    public Mono<String> getCartItems(Authentication authentication, Model model) {
+        return cartService.getCartSummary(authentication.getName())
                 .map(summary -> {
                     model.addAttribute("items", summary.items());
                     model.addAttribute("total", summary.total());
@@ -33,8 +32,8 @@ public class CartController {
     }
 
     @PostMapping("/items")
-    public Mono<String> updateCartItem(@ModelAttribute CartItemForm form, Model model) {
-        return cartService.updateItemAndGetSummary(form.getId(), form.getAction(), USER_ID)
+    public Mono<String> updateCartItem(@ModelAttribute CartItemForm form, Authentication authentication, Model model) {
+        return cartService.updateItemAndGetSummary(form.getId(), form.getAction(), authentication.getName())
                 .map(summary -> {
                     model.addAttribute("items", summary.items());
                     model.addAttribute("total", summary.total());

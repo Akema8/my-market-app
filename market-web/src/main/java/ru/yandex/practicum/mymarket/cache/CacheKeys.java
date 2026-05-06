@@ -2,7 +2,6 @@ package ru.yandex.practicum.mymarket.cache;
 
 public final class CacheKeys {
 
-    public static final String CART_KEY = "cart:all";
     public static final String CART_PATTERN = "cart:*";
     public static final String PRODUCTS_PATTERN = "products:*";
     public static final String PRODUCT_PATTERN = "product:*";
@@ -11,13 +10,18 @@ public final class CacheKeys {
     private CacheKeys() {
     }
 
-    public static String products(String search, String sort, int page, int size) {
+    public static String products(String search, String sort, int page, int size, Long cartId) {
         String term = (search != null && !search.isBlank()) ? search : "all";
-        return "products:" + term + ":" + sort + ":" + page + "-" + size;
+        String cart = cartId != null ? String.valueOf(cartId) : "anon";
+        return "products:" + term + ":" + sort + ":" + page + "-" + size + ":cart-" + cart;
     }
 
     public static String product(Long id) {
         return "product:" + id;
+    }
+
+    public static String cart(Long cartId) {
+        return "cart:" + cartId;
     }
 
     public static String balance(Long userId) {
